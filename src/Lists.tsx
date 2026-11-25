@@ -11,6 +11,8 @@ export default function Lists({ me, isOwner = false }: { me: Profile; isOwner?: 
   const [kids, setKids] = useState<Kid[]>([])
   const [items, setItems] = useState<Item[] | null>(null)
   const [bought, setBought] = useState<Record<string, boolean>>({})
+  const [buyer, setBuyer] = useState<Record<string, string | null>>({})   // item id -> profile id of who bought it
+  const [names, setNames] = useState<Record<string, string>>({})          // owner only: profile id -> name
   const [kidId, setKidId] = useState<string | null>(null)
   const [view, setView] = useState<'needed' | 'bought'>('needed')
   const [err, setErr] = useState('')
@@ -21,13 +23,18 @@ export default function Lists({ me, isOwner = false }: { me: Profile; isOwner?: 
     const [k, i, s] = await Promise.all([
       supabase.from('profiles').select('id, display_name').eq('family_id', me.family_id).eq('role', 'child').order('created_at'),
       supabase.from('wish_list_items').select(ITEM_COLS).eq('family_id', me.family_id).order('created_at', { ascending: false }),
-      supabase.from('purchase_status').select('item_id, status').eq('family_id', me.family_id),
+      supabase.from('purchase_status').select('item_id, status, purchased_by').eq('family_id', me.family_id),
     ])
     if (k.error || i.error || s.error) setErr('Could not load the lists. Check your connection and try again.')
     else setErr('')
     setKids((k.data as Kid[]) || [])
     setItems((i.data as Item[]) || [])
     setBought(Object.fromEntries((s.data || []).map((r: any) => [r.item_id, r.status === 'purchased'])))
+    setBuyer(Object.fromEntries((s.data || []).map((r: any) => [r.item_id, r.purchased_by ?? null])))
+    if (isOwner) {
+      const { data: ppl } = await supabase.from('profiles').select('id, display_name').eq('family_id', me.family_id)
+      setNames(Object.fromEntries((ppl || []).map((p: any) => [p.id, p.display_name])))
+    }
   }
 
   useEffect(() => {
@@ -50,13 +57,31 @@ export default function Lists({ me, isOwner = false }: { me: Profile; isOwner?: 
     return () => document.body.classList.remove('home-view')
   }, [kidId])
 
+  // Who may undo: whoever bought it, or Mom (the owner) for anyone's. The database enforces the same rule.
+  const canUndo = (i: Item) => isOwner || buyer[i.id] === me.id
+  const boughtBy = (i: Item) => {
+    const b = buyer[i.id]
+    if (b === me.id) return 'Bought by you'
+    if (isOwner) return b ? `Bought by ${names[b] ?? 'someone'}` : 'Bought (before names were saved)'
+    return 'Bought by someone else'
+  }
+
   async function toggle(i: Item) {
     const next = !bought[i.id]
-    if (!next && !confirm(`Mark "${i.name}" as still needed? Others will see it as available again.`)) return
-    setBusy(i.id)
-    setBought((b) => ({ ...b, [i.id]: next }))
+    if (!next) {
+      if (!canUndo(i)) return setErr('Only the person who bought this (or Mom) can undo it.')
+      const who = buyer[i.id] && buyer[i.id] !== me.id ? `${names[buyer[i.id]!] ?? 'Someone else'} bought this. ` : ''
+      if (!confirm(`${who}Mark "${i.name}" as still needed? Others will see it as available again.`)) return
+    }
+    setBusy(i.id); setErr('')
+    const prevBuyer = buyer[i.id] ?? null
+    setBought((b) => ({ ...b, [i.id]: next })); setBuyer((m) => ({ ...m, [i.id]: next ? me.id : null }))
     const { error } = await supabase.from('purchase_status').update({ status: next ? 'purchased' : 'available' }).eq('item_id', i.id)
-    if (error) { setErr('Could not update. Please try again.'); setBought((b) => ({ ...b, [i.id]: !next })) }
+    if (error) {
+      setErr(error.message.includes('Only the person') ? 'Only the person who bought this (or Mom) can undo it.' : 'Could not update. Please try again.')
+      setBought((b) => ({ ...b, [i.id]: !next })); setBuyer((m) => ({ ...m, [i.id]: prevBuyer }))
+      load()
+    }
     setBusy(null)
   }
 
@@ -162,8 +187,10 @@ export default function Lists({ me, isOwner = false }: { me: Profile; isOwner?: 
           summary={(list) => `${list.length} bought`}
           render={(i) => (
             <WishCard key={i.id} item={i}
-              top={<span className="tag mint"><Check size={14} /> Bought</span>}
-              actions={<>{removeBtn(i)}<button className="pill soft" disabled={busy === i.id} onClick={() => toggle(i)}>Undo, still needed</button></>}
+              top={<span className="tag mint"><Check size={14} /> {boughtBy(i)}</span>}
+              actions={<>{removeBtn(i)}{canUndo(i)
+                ? <button className="pill soft" disabled={busy === i.id} onClick={() => toggle(i)}>Undo, still needed</button>
+                : <span className="muted">Only the buyer can undo</span>}</>}
             />
           )} />
       )}
