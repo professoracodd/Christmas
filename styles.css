@@ -26,3 +26,4 @@ button:disabled { opacity:.6; }
 
 .addform { display:flex; gap:8px; } .addform input { flex:1; min-width:0; } .addform select { font:inherit; padding:8px; border:1px solid var(--line); border-radius:8px; background:#fff; }
 .hint { color:var(--muted); margin:4px 0 0; }
+.install summary { cursor:pointer; font-weight:600; color:var(--spruce); } .install p { margin:8px 0 0; }

@@ -46,16 +46,26 @@ function Auth({ problem }: { problem: string }) {
   )
 }
 
+function Install() {
+  return (
+    <details className="card install">
+      <summary>Add this to your home screen</summary>
+      <p><strong>iPhone (Safari):</strong> tap the Share button, then <em>Add to Home Screen</em>, then <em>Add</em>.</p>
+      <p><strong>Android (Chrome):</strong> tap the ⋮ menu, then <em>Add to Home screen</em> or <em>Install app</em>.</p>
+      <p className="hint">Do this after opening your personal link, so the shortcut stays signed in.</p>
+    </details>
+  )
+}
+
 export default function App() {
   const [uid, setUid] = useState<string | null | undefined>(undefined)
   const [profile, setProfile] = useState<Profile | null>(null)
   const [problem, setProblem] = useState('')
 
-  // Personal link: https://site/#k=TOKEN signs this phone in, then the token is removed from the address bar
+  // Personal link: https://site/#k=TOKEN signs this phone in. The link stays in the address bar so a home-screen shortcut made from it can sign in too.
   useEffect(() => {
     const m = window.location.hash.match(/^#k=([A-Za-z0-9]+)$/)
     if (!m) return
-    window.history.replaceState(null, '', window.location.pathname + window.location.search)
     admin({ action: 'link_login', token: m[1] }).then(startSession).catch((e) => setProblem(e.message))
   }, [])
 
@@ -87,6 +97,7 @@ export default function App() {
           {profile.role === 'parent' && <People />}
         </main>
       )}
+      <Install />
     </div>
   )
 }
