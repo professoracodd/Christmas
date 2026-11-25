@@ -50,8 +50,8 @@ export async function findPicture(url: string): Promise<Preview> {
   }
 
   const m = await microlink(finalUrl)
-  if (m?.image && await realImage(m.image)) return { image: m.image, title: best.title || m.title, site: best.site || m.site }
-  return { ...best, title: best.title || m?.title || null }
+  if (m?.image && await realImage(m.image)) return { image: m.image, title: best.title || (m.title && !/gallery|robot|captcha/i.test(m.title) ? m.title : null), site: best.site || m.site }
+  return best // Microlink's title is only trusted when its picture was real
 }
 
 // Kid takes or picks a photo: shrink it in the browser, then store it in the wish-photos bucket
