@@ -4,7 +4,7 @@ import Child from './Child'
 import Lists from './Lists'
 import People, { useIsOwner } from './People'
 import { Banner } from './ui'
-import { List, Logout, Phone, Users } from './Icons'
+import { HelpIcon, List, Logout, Users } from './Icons'
 
 type Mode = 'home' | 'setup' | 'owner'
 const ROLE_LABEL: Record<string, string> = { parent: 'Parent', gift_buyer: 'Gift buyer', child: 'Wish maker' }
@@ -72,31 +72,47 @@ function Auth({ problem }: { problem: string }) {
   )
 }
 
-function Install() {
+const TOUR_KEY = 'tour-seen-v1'
+const tourSeen = () => { try { return localStorage.getItem(TOUR_KEY) === '1' } catch { return false } }
+const markTourSeen = () => { try { localStorage.setItem(TOUR_KEY, '1') } catch { /* private mode */ } }
+
+function Help({ profile, welcome, onDone }: { profile: Profile; welcome: boolean; onDone: () => void }) {
+  const showTour = profile.role !== 'child' // the tour shows shopping; kids get the written help only
   return (
     <>
       <section className="hero">
         <div className="hero-row">
-          <div className="avatar" aria-hidden="true"><Phone size={28} /></div>
-          <div><h1>Add to Home Screen</h1><p>Open it like an app, already signed in.</p></div>
+          <div className="avatar" aria-hidden="true"><HelpIcon size={28} /></div>
+          <div><h1>{welcome ? 'Welcome!' : 'Help'}</h1><p>{welcome ? 'Here is a quick tour before you start shopping.' : 'How to use the wish lists'}</p></div>
         </div>
       </section>
+      {showTour && (
+        <div className="card tour">
+          <h2>Quick tour</h2>
+          <video src={asset('tour.mp4')} poster={asset('tour-poster.jpg')} controls playsInline preload="metadata"
+            autoPlay={welcome} muted={welcome} aria-label="Video tour: picking a list, opening store folders and links, marking gifts bought, undoing, and adding the app to your home screen" />
+          {welcome && <button className="pill primary block" onClick={onDone}>Start shopping</button>}
+        </div>
+      )}
       <div className="card help">
-        <h2>iPhone (Safari)</h2>
-        <p>Tap the Share button, then <strong>Add to Home Screen</strong>, then <strong>Add</strong>.</p>
-        <h2>Android (Chrome)</h2>
-        <p>Tap the menu (three dots), then <strong>Add to Home screen</strong> or <strong>Install app</strong>.</p>
+        <h2>Add to your home screen</h2>
+        <p><strong>iPhone (Safari):</strong> tap the Share button, then <strong>Add to Home Screen</strong>, then <strong>Add</strong>.</p>
+        <p><strong>Android (Chrome):</strong> tap the menu (three dots), then <strong>Add to Home screen</strong> or <strong>Install app</strong>.</p>
         <p className="muted">Do this right after opening your personal link from the text message, so the shortcut stays signed in.</p>
-        <p className="muted">The owner doesn't need a link: if the home-screen app asks you to sign in, tap <strong>Owner sign-in</strong> and enter the setup code.</p>
+        {profile.role === 'parent' && <p className="muted">The owner doesn't need a link: if the home-screen app asks you to sign in, tap <strong>Owner sign-in</strong> and enter the setup code.</p>}
       </div>
     </>
   )
 }
 
-type Tab = 'lists' | 'people' | 'install'
+type Tab = 'lists' | 'people' | 'help'
 
 function Home({ profile }: { profile: Profile }) {
-  const [tab, setTab] = useState<Tab>('lists')
+  // Shoppers (gift buyers) see the tour automatically the first time only
+  const [welcome, setWelcome] = useState(() => profile.role === 'gift_buyer' && !tourSeen())
+  const [tab, setTab] = useState<Tab>(welcome ? 'help' : 'lists')
+  useEffect(() => { if (welcome) markTourSeen() }, [])
+  useEffect(() => { if (tab !== 'help') setWelcome(false) }, [tab])
   const [navTap, setNavTap] = useState(0) // tapping the current tab again resets it (e.g. back to the lists home)
   // Only parents ask for the people list; the backend decides which parent is the owner
   const owner = useIsOwner(profile.role === 'parent')
@@ -104,7 +120,7 @@ function Home({ profile }: { profile: Profile }) {
   const tabs: { id: Tab; label: string; icon: ReactNode }[] = [
     { id: 'lists', label: profile.role === 'child' ? 'My List' : 'Wish Lists', icon: <List size={24} /> },
     ...(owner.people ? [{ id: 'people' as Tab, label: 'People', icon: <Users size={24} /> }] : []),
-    { id: 'install', label: 'Add to Phone', icon: <Phone size={24} /> },
+    { id: 'help', label: 'Help', icon: <HelpIcon size={24} /> },
   ]
   useEffect(() => { window.scrollTo(0, 0) }, [tab])
 
@@ -128,7 +144,7 @@ function Home({ profile }: { profile: Profile }) {
       <main className="content">
         {tab === 'lists' && (profile.role === 'child' ? <Child key={navTap} me={profile} /> : <Lists key={navTap} me={profile} />)}
         {tab === 'people' && owner.people && <People me={profile} people={owner.people} reload={owner.reload} />}
-        {tab === 'install' && <Install />}
+        {tab === 'help' && <Help profile={profile} welcome={welcome} onDone={() => setTab('lists')} />}
       </main>
       <nav className="bottom-nav" aria-label="Sections">
         {tabs.map((t) => (

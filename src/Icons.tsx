@@ -15,6 +15,9 @@ export const Star = ({ size, className }: P) => (
 export const Sparkle = ({ size, className }: P) => (
   <svg {...base(size, className)}><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2 2M16 16l2 2M6 18l2-2M16 8l2-2" /></svg>
 )
+export const HelpIcon = ({ size, className }: P) => (
+  <svg {...base(size, className)}><circle cx="12" cy="12" r="9.5" /><path d="M9.3 9.3a2.8 2.8 0 0 1 5.4 1c0 1.9-2.7 2.4-2.7 4" /><path d="M12 17.6h.01" /></svg>
+)
 export const ChevronLeft = ({ size, className }: P) => <svg {...base(size, className)}><path d="m15 5-7 7 7 7" /></svg>
 export const Camera = ({ size, className }: P) => (
   <svg {...base(size, className)}><path d="M4 8h3l2-3h6l2 3h3v11H4z" /><circle cx="12" cy="13" r="3.5" /></svg>
