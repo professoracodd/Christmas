@@ -2,7 +2,7 @@
 // Links hold a long random token (hashed for sign-in lookups, encrypted so the owner can re-send them).
 //
 // Public:  bootstrap (needs SETUP_CODE; also creates Eli and Jazz; only works once), owner_login (needs SETUP_CODE), link_login
-// Owner-only (the first parent, i.e. mom): add_person, reset_link, list_people (includes each person's link), delete_person
+// Owner-only (the first parent, i.e. mom): add_person, reset_link, list_people (includes each person's link), delete_person, delete_item
 // Any signed-in person: link_preview (reads a store page's title and picture for a wish card)
 //
 // Deploy with JWT verification OFF (supabase/config.toml, or the toggle in the dashboard): this code checks sign-in itself.
@@ -186,6 +186,19 @@ async function deletePerson(req: Request, body: Record<string, unknown>) {
   return { id: personId, name: person.display_name };
 }
 
+// Mom can take a wish off a kid's list (kids can only delete their own; this goes around that for the owner only)
+async function deleteItem(req: Request, body: Record<string, unknown>) {
+  const owner = await requireOwner(req);
+  const itemId = str(body.item_id, 36, 36, "item_id");
+  const { data: item } = await admin.from("wish_list_items").select("id, name, image_url").eq("id", itemId).eq("family_id", owner.family_id).maybeSingle();
+  if (!item) throw new HttpError(404, "That wish is already gone");
+  const photo = item.image_url?.split("/storage/v1/object/public/wish-photos/")[1];
+  if (photo) await admin.storage.from("wish-photos").remove([decodeURIComponent(photo)]);
+  const { error } = await admin.from("wish_list_items").delete().eq("id", itemId).eq("family_id", owner.family_id);
+  if (error) { console.error("delete item failed", error); throw new HttpError(500, "Could not remove that wish"); }
+  return { id: item.id, name: item.name };
+}
+
 async function listPeople(req: Request) {
   const owner = await requireOwner(req);
   const { data } = await admin.from("profiles").select("id, display_name, role").eq("family_id", owner.family_id).order("created_at");
@@ -306,6 +319,7 @@ Deno.serve(async (req) => {
       case "list_people": return json(await listPeople(req));
       case "link_preview": return json(await linkPreview(req, body));
       case "delete_person": return json(await deletePerson(req, body));
+      case "delete_item": return json(await deleteItem(req, body));
       default: return json({ error: "Unknown action" }, 400);
     }
   } catch (e) {
