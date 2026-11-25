@@ -216,28 +216,65 @@ function meta(html: string, keys: string[]) {
   return null;
 }
 
+// Pictures hide in different places: social tags, product data (JSON-LD), and Amazon's own image attributes
+function findImage(html: string): string | null {
+  const og = meta(html, ["og:image:secure_url", "og:image", "twitter:image", "twitter:image:src"]);
+  if (og) return og;
+  for (const m of html.matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)) {
+    try {
+      const stack: unknown[] = [JSON.parse(m[1])];
+      while (stack.length) {
+        const n = stack.pop() as any;
+        if (!n || typeof n !== "object") continue;
+        if (Array.isArray(n)) { stack.push(...n); continue; }
+        const img = n.image;
+        if (img) {
+          const first = Array.isArray(img) ? img[0] : img;
+          const url = typeof first === "string" ? first : first?.url ?? first?.contentUrl;
+          if (typeof url === "string") return url;
+        }
+        if (n["@graph"]) stack.push(n["@graph"]);
+      }
+    } catch { /* bad JSON on the page */ }
+  }
+  const amazon = html.match(/data-old-hires=["'](https:[^"']+)["']/i)?.[1]
+    ?? html.match(/"hiRes"\s*:\s*"(https:[^"]+)"/)?.[1]
+    ?? html.match(/"large"\s*:\s*"(https:\/\/[^"]*media-amazon[^"]+)"/)?.[1]
+    ?? html.match(/id=["']landingImage["'][^>]*src=["'](https:[^"']+)["']/i)?.[1];
+  if (amazon) return amazon;
+  return html.match(/<link[^>]+rel=["']image_src["'][^>]*href=["']([^"']+)["']/i)?.[1] ?? null;
+}
+
 async function linkPreview(req: Request, body: Record<string, unknown>) {
   await requireUser(req);
   let url = publicUrl(str(body.url, 8, 2000, "url"));
   let res: Response | null = null;
-  for (let hop = 0; hop < 4; hop++) {
+  for (let hop = 0; hop < 5; hop++) {
     res = await fetch(url, {
       redirect: "manual",
-      signal: AbortSignal.timeout(7000),
-      headers: { "User-Agent": "Mozilla/5.0 (compatible; FamilyWishList/1.0)", "Accept": "text/html" },
+      signal: AbortSignal.timeout(8000),
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+      },
     }).catch(() => null);
     const next = res && res.status >= 300 && res.status < 400 ? res.headers.get("location") : null;
     if (!next) break;
     url = publicUrl(new URL(next, url).href);
   }
-  if (!res || !res.ok || !(res.headers.get("content-type") ?? "").includes("html")) return { title: null, image: null, site: url.hostname.replace(/^www\./, "") };
-  const html = (await res.text()).slice(0, 600_000);
-  const rawImg = meta(html, ["og:image:secure_url", "og:image", "twitter:image", "twitter:image:src"]);
+  const site0 = url.hostname.replace(/^www\./, "");
+  const empty = { title: null, image: null, site: site0, final_url: url.href };
+  if (!res || !res.ok || !(res.headers.get("content-type") ?? "").includes("html")) return empty;
+  const html = (await res.text()).slice(0, 1_500_000);
+  const rawImg = findImage(html);
   let image: string | null = null;
-  try { if (rawImg) { const i = new URL(rawImg, url); if (/^https?:$/.test(i.protocol)) image = i.href.slice(0, 2000); } } catch { /* ignore */ }
-  const title = (meta(html, ["og:title", "twitter:title"]) ?? decodeEntities(html.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1] ?? "")) || null;
-  const site = meta(html, ["og:site_name"]) ?? url.hostname.replace(/^www\./, "");
-  return { title: title?.slice(0, 300) ?? null, image, site: site.slice(0, 100) };
+  try { if (rawImg) { const i = new URL(decodeEntities(rawImg), url); if (/^https?:$/.test(i.protocol)) image = i.href.slice(0, 2000); } } catch { /* ignore */ }
+  let title = (meta(html, ["og:title", "twitter:title"]) ?? decodeEntities(html.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1] ?? "")) || null;
+  // Robot-check pages are not product names
+  if (title && /robot|captcha|access denied|page not found|sorry/i.test(title)) title = null;
+  const site = meta(html, ["og:site_name"]) ?? site0;
+  return { title: title?.slice(0, 300) ?? null, image, site: site.slice(0, 100), final_url: url.href };
 }
 
 Deno.serve(async (req) => {
