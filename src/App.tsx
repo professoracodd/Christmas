@@ -175,7 +175,7 @@ function Home({ profile }: { profile: Profile }) {
         </div>
       </header>
       <main className="content">
-        {tab === 'lists' && (profile.role === 'child' ? <Child key={navTap} me={profile} /> : <Lists key={navTap} me={profile} />)}
+        {tab === 'lists' && (profile.role === 'child' ? <Child key={navTap} me={profile} /> : <Lists key={navTap} me={profile} isOwner={!!owner.people} />)}
         {tab === 'people' && owner.people && <People me={profile} people={owner.people} reload={owner.reload} />}
         {tab === 'help' && <Help profile={profile} welcome={welcome} onDone={() => setTab('lists')} />}
       </main>

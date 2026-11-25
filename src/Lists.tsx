@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { supabase, Profile, Item, ITEM_COLS, money } from './supabase'
+import { supabase, admin, Profile, Item, ITEM_COLS, money } from './supabase'
 import { WishCard, Banner, toneFor, StoreGroups } from './ui'
-import { Check, ChevronLeft, Gift, Sparkle } from './Icons'
+import { Check, ChevronLeft, Gift, Sparkle, Trash } from './Icons'
 
 type Kid = { id: string; display_name: string }
 
 // Shared lists for parents and gift buyers. Kids never see purchase status (the database blocks it too).
 // Home shows the nutcracker with a button per kid; each kid's page has the progress bar and a "Still needed" filter.
-export default function Lists({ me }: { me: Profile }) {
+export default function Lists({ me, isOwner = false }: { me: Profile; isOwner?: boolean }) {
   const [kids, setKids] = useState<Kid[]>([])
   const [items, setItems] = useState<Item[] | null>(null)
   const [bought, setBought] = useState<Record<string, boolean>>({})
@@ -59,6 +59,19 @@ export default function Lists({ me }: { me: Profile }) {
     if (error) { setErr('Could not update. Please try again.'); setBought((b) => ({ ...b, [i.id]: !next })) }
     setBusy(null)
   }
+
+  // Owner only: take a wish off a kid's list
+  async function removeWish(i: Item) {
+    const who = kids.find((k) => k.id === i.child_id)?.display_name ?? 'their'
+    if (!confirm(`Remove "${i.name}" from ${who}'s list? It will be gone for everyone, including ${who}.`)) return
+    setBusy(i.id); setErr('')
+    try { await admin({ action: 'delete_item', item_id: i.id }); setItems((list) => (list ?? []).filter((x) => x.id !== i.id)) }
+    catch (x: any) { setErr(x.message) }
+    setBusy(null)
+  }
+  const removeBtn = (i: Item) => isOwner
+    ? <button className="pill ghost danger" disabled={busy === i.id} onClick={() => removeWish(i)} aria-label={`Remove ${i.name} from the list`}><Trash size={16} /> Remove</button>
+    : null
 
   const kidIndex = useMemo(() => Object.fromEntries(kids.map((k, n) => [k.id, n])), [kids])
   const all = items ?? []
@@ -141,7 +154,7 @@ export default function Lists({ me }: { me: Profile }) {
           render={(i) => (
             <WishCard key={i.id} item={i}
               top={<span className="tag plain"><Sparkle size={14} /> Still wished for</span>}
-              actions={<button className="pill primary" disabled={busy === i.id} onClick={() => toggle(i)}><Check size={16} /> I bought this</button>}
+              actions={<>{removeBtn(i)}<button className="pill primary" disabled={busy === i.id} onClick={() => toggle(i)}><Check size={16} /> I bought this</button></>}
             />
           )} />
       ) : (
@@ -150,7 +163,7 @@ export default function Lists({ me }: { me: Profile }) {
           render={(i) => (
             <WishCard key={i.id} item={i}
               top={<span className="tag mint"><Check size={14} /> Bought</span>}
-              actions={<button className="pill soft" disabled={busy === i.id} onClick={() => toggle(i)}>Undo, still needed</button>}
+              actions={<>{removeBtn(i)}<button className="pill soft" disabled={busy === i.id} onClick={() => toggle(i)}>Undo, still needed</button></>}
             />
           )} />
       )}
