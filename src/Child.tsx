@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, FormEvent } from 'react'
 import { supabase, Profile, Item, ITEM_COLS, siteName } from './supabase'
 import { findPicture, uploadPhoto, isUploadedPhoto } from './pictures'
 import { Sheet, WishCard, WishImage, Banner } from './ui'
-import { Camera, Close, Pencil, Plus, Trash, Sparkle } from './Icons'
+import { Camera, Close, LinkOut, Pencil, Plus, Trash, Sparkle } from './Icons'
 
 // photo: the picture is one the kid uploaded (kept even without a link)
 const blank = { notes: '', price: '', url: '', image_url: '', link_title: '', link_site: '', photo: false }
@@ -39,6 +39,10 @@ export default function Child({ me }: { me: Profile }) {
   const [uploading, setUploading] = useState(false)
   const [lookNote, setLookNote] = useState('')
   const lastLooked = useRef('')
+  const [bulkOpen, setBulkOpen] = useState(false)
+  const [bulkText, setBulkText] = useState('')
+  const [bulkMsg, setBulkMsg] = useState('')
+  const [bulkBusy, setBulkBusy] = useState(false)
 
   async function load() {
     const { data, error } = await supabase.from('wish_list_items').select(ITEM_COLS)
@@ -110,6 +114,31 @@ export default function Child({ me }: { me: Profile }) {
     setEditing(null); load()
   }
 
+  // Paste many links at once (e.g. copied from an Amazon wish list): each becomes a wish with its picture and name
+  const linksIn = (text: string) => [...new Set((text.match(/https?:\/\/[^\s<>"')]+/gi) || []).map((u) => u.replace(/[.,;]+$/, '')))]
+  async function addAll() {
+    const have = new Set((items || []).map((i) => i.product_url))
+    const links = linksIn(bulkText).filter((u) => !have.has(u)).slice(0, 25)
+    if (!links.length) return setBulkMsg(linksIn(bulkText).length ? 'Those links are already on your list.' : 'Paste at least one link that starts with http.')
+    setBulkBusy(true)
+    let added = 0
+    for (const [n, url] of links.entries()) {
+      setBulkMsg(`Adding ${n + 1} of ${links.length}…`)
+      const p = await findPicture(url)
+      const site = p.site || siteName(url)
+      const { error } = await supabase.from('wish_list_items').insert({
+        child_id: me.id, family_id: me.family_id, product_url: url.slice(0, 2000),
+        name: (p.title || `Something from ${site || 'this link'}`).slice(0, 200),
+        link_title: p.title ? p.title.slice(0, 300) : null, link_site: site ? site.slice(0, 100) : null,
+        image_url: p.image, description: null, estimated_price: null,
+      })
+      if (!error) added++
+    }
+    setBulkBusy(false); load()
+    if (added === links.length) { setBulkOpen(false); setBulkText(''); setBulkMsg('') }
+    else setBulkMsg(`Added ${added} of ${links.length}. The rest could not be saved.`)
+  }
+
   async function remove(i: Item) {
     if (!confirm(`Take "${i.name}" off your list?`)) return
     await supabase.from('wish_list_items').delete().eq('id', i.id)
@@ -150,7 +179,24 @@ export default function Child({ me }: { me: Profile }) {
         </div>
       )}
 
-      <div className="fab-wrap"><button className="fab" onClick={() => edit()}><Plus size={22} /> Add a wish</button></div>
+      <div className="fab-wrap">
+        <button className="fab" onClick={() => edit()}><Plus size={22} /> Add a wish</button>
+        <button className="fab fab-small" onClick={() => { setBulkMsg(''); setBulkOpen(true) }}><LinkOut size={18} /> Add links</button>
+      </div>
+
+      <Sheet open={bulkOpen} title="Add several links" onClose={() => !bulkBusy && setBulkOpen(false)}>
+        <div className="form">
+          <label className="field"><span>Paste links</span>
+            <textarea value={bulkText} onChange={(e) => setBulkText(e.target.value)} rows={6} disabled={bulkBusy}
+              placeholder={'Paste one or more store links here.\nOn Amazon: open your list, tap an item, Share, Copy link, then paste. Repeat for each item.'} />
+            <small>{(() => { const n = linksIn(bulkText).length; return n ? `${n} ${n === 1 ? 'link' : 'links'} found` : 'Each link becomes its own wish, with its picture.' })()}</small>
+          </label>
+          {bulkMsg && <p className="muted" role="status">{bulkMsg}</p>}
+          <button className="pill primary block" disabled={bulkBusy || !linksIn(bulkText).length} onClick={addAll}>
+            {bulkBusy ? 'Adding…' : 'Add them to my list'}
+          </button>
+        </div>
+      </Sheet>
 
       <Sheet open={editing !== null} title={editing === 'new' ? 'Add a wish' : 'Change your wish'} onClose={() => setEditing(null)}>
         <form onSubmit={save} className="form">

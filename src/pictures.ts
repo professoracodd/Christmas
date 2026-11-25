@@ -19,6 +19,20 @@ function asinOf(url: string) {
   return url.match(/(?:\/dp\/|\/gp\/product\/|\/gp\/aw\/d\/|\/product\/)([A-Z0-9]{10})(?:[/?#]|$)/i)?.[1]?.toUpperCase() ?? null
 }
 
+// Many store addresses carry the product name, e.g. amazon.com/LEGO-Creator-Winter-Village/dp/B0C...
+export function titleFromUrl(url: string): string | null {
+  try {
+    const parts = new URL(url).pathname.split('/').filter(Boolean).map(decodeURIComponent)
+    const dp = parts.findIndex((p) => /^(dp|gp)$/i.test(p))
+    const candidates = dp > 0 ? [parts[dp - 1]] : [...parts].reverse()
+    for (const c of candidates) {
+      const words = c.replace(/\.[a-z0-9]{2,5}$/i, '').split(/[-_+]+/).filter((w) => w && !/^\d{5,}$/.test(w))
+      if (words.length >= 2 && /[a-z]/i.test(c) && !/^[A-Z0-9]{10}$/.test(c)) return words.join(' ').slice(0, 200)
+    }
+  } catch { /* not a URL */ }
+  return null
+}
+
 // Microlink reads pages that block simple lookups. Free with no key: a few lookups per day for each phone.
 async function microlink(url: string): Promise<Preview | null> {
   try {
@@ -40,6 +54,7 @@ export async function findPicture(url: string): Promise<Preview> {
     best = { image: r.image || null, title: r.title || null, site: r.site || null }
     if (r.final_url) finalUrl = r.final_url
   } catch { /* fall through */ }
+  if (!best.title) best.title = titleFromUrl(finalUrl) || titleFromUrl(url)
   if (best.image && await realImage(best.image)) return best
   best.image = null
 
