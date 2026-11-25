@@ -195,11 +195,13 @@ export default function App() {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [profileErr, setProfileErr] = useState(false)
   const [problem, setProblem] = useState('')
+  // While a personal link is signing in, show a waiting screen (no buttons to tap by mistake)
+  const [linking, setLinking] = useState(configured && !!START_TOKEN)
 
   // Personal link: https://site/#k=TOKEN signs this phone in. The link stays in the address bar so a home-screen shortcut made from it can sign in too.
   useEffect(() => {
     if (!configured || !START_TOKEN) return
-    admin({ action: 'link_login', token: START_TOKEN }).then(startSession).catch((e) => setProblem(e.message))
+    admin({ action: 'link_login', token: START_TOKEN }).then(startSession).catch((e) => { setProblem(e.message); setLinking(false) })
   }, [])
 
   useEffect(() => {
@@ -208,6 +210,8 @@ export default function App() {
     const { data } = supabase.auth.onAuthStateChange((_e, s) => setUid(s?.user.id ?? null))
     return () => data.subscription.unsubscribe()
   }, [])
+
+  useEffect(() => { if (uid) setLinking(false) }, [uid])
 
   useEffect(() => {
     setProfile(null); setProfileErr(false)
@@ -223,6 +227,12 @@ export default function App() {
     </Splash>
   )
   if (uid === undefined) return <Splash><p className="lead">Loading…</p></Splash>
+  if (!uid && linking) return (
+    <Splash>
+      <div className="spinner" role="status" aria-label="Signing you in" />
+      <p className="lead">Signing you in…</p>
+    </Splash>
+  )
   if (!uid) return <Auth problem={problem} />
   if (profileErr) return (
     <Splash>

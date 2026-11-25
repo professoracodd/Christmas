@@ -274,3 +274,8 @@ body.home-view .shell::after { background: url('/bg.jpg') center calc(70px + env
 /* Help tab tour video */
 .tour { display: flex; flex-direction: column; gap: 12px; }
 .tour video { width: 100%; max-width: 420px; align-self: center; aspect-ratio: 9 / 16; border-radius: var(--r-md); background: #9db2b3; box-shadow: 0 8px 24px rgba(74, 62, 71, .25); }
+
+/* Waiting spinner while a personal link signs in */
+.spinner { align-self: center; width: 46px; height: 46px; border-radius: 50%; border: 5px solid var(--pink-fixed); border-top-color: var(--primary); animation: spin .9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation: spin 2.5s linear infinite !important; } }
