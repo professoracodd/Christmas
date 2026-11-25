@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase, Profile, Item, ITEM_COLS, money } from './supabase'
-import { WishCard, Banner, toneFor } from './ui'
+import { WishCard, Banner, toneFor, StoreGroups } from './ui'
 import { Check, ChevronLeft, Gift, Sparkle } from './Icons'
 
 type Kid = { id: string; display_name: string }
@@ -125,8 +125,12 @@ export default function Lists({ me }: { me: Profile }) {
         <button className={`chip${neededOnly ? ' on' : ''}`} aria-pressed={neededOnly} onClick={() => setNeededOnly(true)}>Still needed</button>
       </div>
 
-      <div className="wish-grid">
-        {shown.map((i) => {
+      <StoreGroups items={shown}
+        summary={(list) => {
+          const need = list.filter((i) => !bought[i.id]).length
+          return need === list.length ? `${need} still needed` : need === 0 ? `All ${list.length} bought` : `${need} still needed · ${list.length - need} bought`
+        }}
+        render={(i) => {
           const done = !!bought[i.id]
           return (
             <WishCard key={i.id} item={i} faded={done}
@@ -136,8 +140,7 @@ export default function Lists({ me }: { me: Profile }) {
                 : <button className="pill primary" disabled={busy === i.id} onClick={() => toggle(i)}><Check size={16} /> I bought this</button>}
             />
           )
-        })}
-      </div>
+        }} />
 
       {items !== null && shown.length === 0 && (
         <div className="empty">

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, FormEvent } from 'react'
 import { supabase, Profile, Item, ITEM_COLS, siteName } from './supabase'
 import { findPicture, uploadPhoto, isUploadedPhoto } from './pictures'
-import { Sheet, WishCard, WishImage, Banner } from './ui'
+import { Sheet, WishCard, WishImage, Banner, StoreGroups } from './ui'
 import { Camera, Close, LinkOut, Pencil, Plus, Trash, Sparkle } from './Icons'
 
 // photo: the picture is one the kid uploaded (kept even without a link)
@@ -162,14 +162,12 @@ export default function Child({ me }: { me: Profile }) {
 
       {!editing && <Banner err={err} />}
 
-      <div className="wish-grid">
-        {items?.map((i) => (
-          <WishCard key={i.id} item={i} actions={<>
-            <button className="pill soft" onClick={() => edit(i)}><Pencil size={16} /> Change</button>
-            <button className="pill ghost danger" onClick={() => remove(i)} aria-label={`Delete ${i.name}`}><Trash size={16} /> Delete</button>
-          </>} />
-        ))}
-      </div>
+      <StoreGroups items={items ?? []} render={(i) => (
+        <WishCard key={i.id} item={i} actions={<>
+          <button className="pill soft" onClick={() => edit(i)}><Pencil size={16} /> Change</button>
+          <button className="pill ghost danger" onClick={() => remove(i)} aria-label={`Delete ${i.name}`}><Trash size={16} /> Delete</button>
+        </>} />
+      )} />
 
       {items !== null && count === 0 && (
         <div className="empty">
