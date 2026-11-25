@@ -1,5 +1,5 @@
 import { useEffect, useState, FormEvent } from 'react'
-import { admin, personalLink, TITLE } from './supabase'
+import { admin, personalLink, TITLE, Profile } from './supabase'
 import { Banner } from './ui'
 import { Copy, Message, Refresh, Users } from './Icons'
 
@@ -18,7 +18,7 @@ export function useIsOwner(enabled: boolean) {
   return { people, reload: load }
 }
 
-export default function People({ people, reload }: { people: Person[]; reload: () => void }) {
+export default function People({ me, people, reload }: { me: Profile; people: Person[]; reload: () => void }) {
   const [name, setName] = useState('')
   const [role, setRole] = useState('gift_buyer')
   const [note, setNote] = useState('')
@@ -56,13 +56,15 @@ export default function People({ people, reload }: { people: Person[]; reload: (
           <li key={p.id} className="card">
             <div className="person">
               <div className="mini-avatar" aria-hidden="true">{p.name.slice(0, 1).toUpperCase()}</div>
-              <div><strong>{p.name}</strong><span className="muted">{ROLE[p.role]}</span></div>
+              <div><strong>{p.name}</strong><span className="muted">{p.id === me.id ? 'Owner (you)' : ROLE[p.role]}</span></div>
             </div>
-            <div className="person-actions">
+            {p.id === me.id ? (
+              <p className="muted">You sign in with the setup code (Owner sign-in), so you don't need a link.</p>
+            ) : <div className="person-actions">
               {p.token && <a className="pill primary" href={smsHref(p)}><Message size={16} /> Text link</a>}
               {p.token && <button className="pill soft" onClick={() => copy(p)}><Copy size={16} /> Copy</button>}
               <button className="pill ghost" onClick={() => renew(p)}><Refresh size={16} /> New link</button>
-            </div>
+            </div>}
           </li>
         ))}
       </ul>

@@ -1,5 +1,5 @@
 import { useEffect, useState, FormEvent, ReactNode } from 'react'
-import { supabase, admin, startSession, configured, daysToChristmas, TITLE, Profile } from './supabase'
+import { supabase, admin, startSession, configured, daysToChristmas, TITLE, Profile, BASE, asset } from './supabase'
 import Child from './Child'
 import Lists from './Lists'
 import People, { useIsOwner } from './People'
@@ -8,6 +8,11 @@ import { List, Logout, Phone, Snowflake, Users } from './Icons'
 
 type Mode = 'home' | 'setup' | 'owner'
 const ROLE_LABEL: Record<string, string> = { parent: 'Parent', gift_buyer: 'Gift buyer', child: 'Wish maker' }
+
+// If a shortcut or old link lands on a wrong address (GitHub shows our 404 copy of the app), move back home, keeping #k=...
+if (window.location.pathname !== BASE) {
+  window.history.replaceState(null, '', BASE + window.location.hash)
+}
 
 // iPhone home-screen apps keep their own storage, so the shortcut has to carry the personal link.
 // Without a manifest, iOS saves the exact page address (including #k=...) as the shortcut.
@@ -19,7 +24,7 @@ function Splash({ children }: { children: ReactNode }) {
   return (
     <main className="splash">
       <div className="card auth">
-        <img src="./icon-192.png" alt="" className="auth-logo" width={88} height={88} />
+        <img src={asset('icon-192.png')} alt="" className="auth-logo" width={88} height={88} />
         <h1>{TITLE}</h1>
         {children}
       </div>
@@ -82,6 +87,7 @@ function Install() {
         <h2>Android (Chrome)</h2>
         <p>Tap the menu (three dots), then <strong>Add to Home screen</strong> or <strong>Install app</strong>.</p>
         <p className="muted">Do this right after opening your personal link from the text message, so the shortcut stays signed in.</p>
+        <p className="muted">The owner doesn't need a link: if the home-screen app asks you to sign in, tap <strong>Owner sign-in</strong> and enter the setup code.</p>
       </div>
     </>
   )
@@ -105,7 +111,7 @@ function Home({ profile }: { profile: Profile }) {
     <div className="shell">
       <header className="topbar">
         <div className="brand">
-          <img src="./icon-192.png" alt="" width={36} height={36} />
+          <img src={asset('icon-192.png')} alt="" width={36} height={36} />
           <div><strong>{TITLE}</strong><span>{profile.display_name} · {ROLE_LABEL[profile.role]}</span></div>
         </div>
         <div className="top-right">
@@ -115,7 +121,7 @@ function Home({ profile }: { profile: Profile }) {
       </header>
       <main className="content">
         {tab === 'lists' && (profile.role === 'child' ? <Child me={profile} /> : <Lists me={profile} />)}
-        {tab === 'people' && owner.people && <People people={owner.people} reload={owner.reload} />}
+        {tab === 'people' && owner.people && <People me={profile} people={owner.people} reload={owner.reload} />}
         {tab === 'install' && <Install />}
       </main>
       <nav className="bottom-nav" aria-label="Sections">

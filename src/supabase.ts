@@ -26,7 +26,10 @@ export async function startSession(r: { token_hash: string }) {
   if (error) throw new Error('Could not sign in. Please try again.')
 }
 
-export const personalLink = (token: string) => `${window.location.origin}${window.location.pathname}#k=${token}`
+// The app's home address ("/Christmas/" on GitHub Pages), never a stray sub-page
+export const BASE = import.meta.env.BASE_URL
+export const asset = (file: string) => `${BASE}${file}`
+export const personalLink = (token: string) => `${window.location.origin}${BASE}#k=${token}`
 
 export type Role = 'parent' | 'child' | 'gift_buyer'
 export type Profile = { id: string; family_id: string; display_name: string; role: Role }

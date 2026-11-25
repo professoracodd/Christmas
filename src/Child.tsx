@@ -1,9 +1,30 @@
 import { useEffect, useRef, useState, FormEvent } from 'react'
-import { admin, supabase, Profile, Item, ITEM_COLS } from './supabase'
+import { admin, supabase, Profile, Item, ITEM_COLS, siteName } from './supabase'
 import { Sheet, WishCard, WishImage, Banner } from './ui'
 import { Pencil, Plus, Trash, Sparkle } from './Icons'
 
-const blank = { name: '', description: '', price: '', url: '', image_url: '', link_title: '', link_site: '' }
+const blank = { notes: '', price: '', url: '', image_url: '', link_title: '', link_site: '' }
+
+// One "Notes" box for the kids. The list still needs a short title, so it comes from the store page's name
+// when there is a link, otherwise from the first line of the notes (the rest become the details).
+function splitNotes(notes: string, linkTitle: string, url: string) {
+  const text = notes.trim()
+  if (linkTitle) return { name: linkTitle.slice(0, 200), description: text || null }
+  if (text) {
+    const [first, ...rest] = text.split('\n')
+    const head = first.trim()
+    if (head.length > 200) return { name: head.slice(0, 197) + '...', description: text }
+    return { name: head, description: rest.join('\n').trim() || null }
+  }
+  if (url) return { name: `Something from ${siteName(url) || 'this link'}`, description: null }
+  return null
+}
+function joinNotes(i: Item) {
+  if (i.link_title && i.name === i.link_title.slice(0, 200)) return i.description || ''
+  if (i.name.startsWith('Something from ') && !i.description) return ''
+  if (i.description && i.description.startsWith(i.name.replace(/\.\.\.$/, ''))) return i.description
+  return [i.name, i.description].filter(Boolean).join('\n')
+}
 type Form = typeof blank
 
 export default function Child({ me }: { me: Profile }) {
@@ -27,7 +48,7 @@ export default function Child({ me }: { me: Profile }) {
     setErr('')
     lastLooked.current = i?.product_url || ''
     setForm(i ? {
-      name: i.name, description: i.description || '', price: i.estimated_price?.toString() || '', url: i.product_url || '',
+      notes: joinNotes(i), price: i.estimated_price?.toString() || '', url: i.product_url || '',
       image_url: i.image_url || '', link_title: i.link_title || '', link_site: i.link_site || '',
     } : blank)
     setEditing(i ? i.id : 'new')
@@ -43,7 +64,6 @@ export default function Child({ me }: { me: Profile }) {
       const r = await admin({ action: 'link_preview', url })
       setForm((f) => f.url.trim() !== url ? f : {
         ...f, image_url: r.image || '', link_title: r.title || '', link_site: r.site || '',
-        name: f.name || (r.title ? String(r.title).slice(0, 200) : ''),
       })
     } catch { setForm((f) => ({ ...f, image_url: '', link_title: '', link_site: '' })) }
     setLooking(false)
@@ -57,8 +77,10 @@ export default function Child({ me }: { me: Profile }) {
     const price = form.price.trim() === '' ? null : Number(form.price.replace(/[$,]/g, ''))
     if (price !== null && (isNaN(price) || price < 0)) return setErr('Price should be a number like 25 or 24.99')
     const keepPreview = url && url === lastLooked.current
+    const parts = splitNotes(form.notes, keepPreview ? form.link_title : '', url)
+    if (!parts) return setErr('Write a note about what you want, or paste a link.')
     const row = {
-      name: form.name.trim(), description: form.description.trim() || null, estimated_price: price, product_url: url || null,
+      ...parts, estimated_price: price, product_url: url || null,
       image_url: keepPreview ? form.image_url || null : null,
       link_title: keepPreview ? form.link_title || null : null,
       link_site: keepPreview ? form.link_site || null : null,
@@ -124,8 +146,9 @@ export default function Child({ me }: { me: Profile }) {
           {form.url.trim() && form.url.trim() === lastLooked.current && form.image_url && (
             <div className="preview"><WishImage src={form.image_url} alt="" /><span>{form.link_site}</span></div>
           )}
-          <label className="field"><span>What do you want?</span><input value={form.name} onChange={set('name')} required maxLength={200} /></label>
-          <label className="field"><span>Details (color, size, anything helpful)</span><textarea value={form.description} onChange={set('description')} maxLength={2000} rows={2} /></label>
+          <label className="field"><span>Notes</span>
+            <textarea value={form.notes} onChange={set('notes')} maxLength={2000} rows={4} placeholder={'What do you want? Add color, size, or anything helpful.'} />
+          </label>
           <label className="field"><span>About how much? ($)</span><input value={form.price} onChange={set('price')} inputMode="decimal" placeholder="25" /></label>
           <Banner err={err} />
           <button className="pill primary block" disabled={saving}>{saving ? 'Saving…' : 'Save wish'}</button>
