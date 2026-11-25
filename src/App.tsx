@@ -4,7 +4,7 @@ import Child from './Child'
 import Lists from './Lists'
 import People, { useIsOwner } from './People'
 import { Banner } from './ui'
-import { List, Logout, Phone, Snowflake, Users } from './Icons'
+import { List, Logout, Phone, Users } from './Icons'
 
 type Mode = 'home' | 'setup' | 'owner'
 const ROLE_LABEL: Record<string, string> = { parent: 'Parent', gift_buyer: 'Gift buyer', child: 'Wish maker' }
@@ -97,6 +97,7 @@ type Tab = 'lists' | 'people' | 'install'
 
 function Home({ profile }: { profile: Profile }) {
   const [tab, setTab] = useState<Tab>('lists')
+  const [navTap, setNavTap] = useState(0) // tapping the current tab again resets it (e.g. back to the lists home)
   // Only parents ask for the people list; the backend decides which parent is the owner
   const owner = useIsOwner(profile.role === 'parent')
   const days = daysToChristmas()
@@ -115,18 +116,23 @@ function Home({ profile }: { profile: Profile }) {
           <div><strong>{TITLE}</strong><span>{profile.display_name} · {ROLE_LABEL[profile.role]}</span></div>
         </div>
         <div className="top-right">
-          <span className="countdown"><Snowflake size={14} /> {days === 0 ? 'Merry Christmas!' : `${days} ${days === 1 ? 'day' : 'days'}`}</span>
+          <div className="calendar" role="img" aria-label={days === 0 ? 'Christmas is today' : `${days} ${days === 1 ? 'day' : 'days'} until Christmas`}>
+            <span className="cal-rings" aria-hidden="true"><i /><i /></span>
+            <span className="cal-head" aria-hidden="true">{days === 0 ? 'TODAY' : days === 1 ? 'DAY' : 'DAYS'}</span>
+            <span className="cal-num" aria-hidden="true">{days === 0 ? 25 : days}</span>
+            <span className="cal-foot" aria-hidden="true">{days === 0 ? 'DEC' : 'TO GO'}</span>
+          </div>
           <button className="icon-btn" onClick={() => supabase.auth.signOut()} aria-label="Sign out" title="Sign out"><Logout size={18} /></button>
         </div>
       </header>
       <main className="content">
-        {tab === 'lists' && (profile.role === 'child' ? <Child me={profile} /> : <Lists me={profile} />)}
+        {tab === 'lists' && (profile.role === 'child' ? <Child key={navTap} me={profile} /> : <Lists key={navTap} me={profile} />)}
         {tab === 'people' && owner.people && <People me={profile} people={owner.people} reload={owner.reload} />}
         {tab === 'install' && <Install />}
       </main>
       <nav className="bottom-nav" aria-label="Sections">
         {tabs.map((t) => (
-          <button key={t.id} className={tab === t.id ? 'on' : ''} aria-current={tab === t.id ? 'page' : undefined} onClick={() => setTab(t.id)}>
+          <button key={t.id} className={tab === t.id ? 'on' : ''} aria-current={tab === t.id ? 'page' : undefined} onClick={() => { if (t.id === tab) setNavTap((n) => n + 1); setTab(t.id) }}>
             {t.icon}<span>{t.label}</span>
           </button>
         ))}

@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState, FormEvent } from 'react'
-import { admin, supabase, Profile, Item, ITEM_COLS, siteName } from './supabase'
+import { supabase, Profile, Item, ITEM_COLS, siteName } from './supabase'
+import { findPicture, uploadPhoto, isUploadedPhoto } from './pictures'
 import { Sheet, WishCard, WishImage, Banner } from './ui'
-import { Pencil, Plus, Trash, Sparkle } from './Icons'
+import { Camera, Close, Pencil, Plus, Trash, Sparkle } from './Icons'
 
-const blank = { notes: '', price: '', url: '', image_url: '', link_title: '', link_site: '' }
+// photo: the picture is one the kid uploaded (kept even without a link)
+const blank = { notes: '', price: '', url: '', image_url: '', link_title: '', link_site: '', photo: false }
 
 // One "Notes" box for the kids. The list still needs a short title, so it comes from the store page's name
 // when there is a link, otherwise from the first line of the notes (the rest become the details).
@@ -34,6 +36,8 @@ export default function Child({ me }: { me: Profile }) {
   const [err, setErr] = useState('')
   const [saving, setSaving] = useState(false)
   const [looking, setLooking] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [lookNote, setLookNote] = useState('')
   const lastLooked = useRef('')
 
   async function load() {
@@ -49,8 +53,9 @@ export default function Child({ me }: { me: Profile }) {
     lastLooked.current = i?.product_url || ''
     setForm(i ? {
       notes: joinNotes(i), price: i.estimated_price?.toString() || '', url: i.product_url || '',
-      image_url: i.image_url || '', link_title: i.link_title || '', link_site: i.link_site || '',
+      image_url: i.image_url || '', link_title: i.link_title || '', link_site: i.link_site || '', photo: isUploadedPhoto(i.image_url),
     } : blank)
+    setLookNote('')
     setEditing(i ? i.id : 'new')
   }
 
@@ -59,14 +64,25 @@ export default function Child({ me }: { me: Profile }) {
     const url = raw.trim()
     if (!/^https?:\/\/\S+\.\S+/i.test(url) || url === lastLooked.current) return
     lastLooked.current = url
-    setLooking(true)
-    try {
-      const r = await admin({ action: 'link_preview', url })
-      setForm((f) => f.url.trim() !== url ? f : {
-        ...f, image_url: r.image || '', link_title: r.title || '', link_site: r.site || '',
-      })
-    } catch { setForm((f) => ({ ...f, image_url: '', link_title: '', link_site: '' })) }
+    setLooking(true); setLookNote('')
+    const r = await findPicture(url)
+    setForm((f) => f.url.trim() !== url ? f : {
+      ...f, link_title: r.title || '', link_site: r.site || '',
+      // a photo the kid uploaded wins over the store picture
+      ...(f.photo ? {} : { image_url: r.image || '' }),
+    })
+    if (!r.image) setLookNote("Couldn't get a picture from that store. Tap Add a photo to use a screenshot or picture instead.")
     setLooking(false)
+  }
+
+  async function pickPhoto(file: File | undefined) {
+    if (!file) return
+    setErr(''); setUploading(true)
+    try {
+      const src = await uploadPhoto(file, me.id)
+      setForm((f) => ({ ...f, image_url: src, photo: true })); setLookNote('')
+    } catch (x: any) { setErr(x.message) }
+    setUploading(false)
   }
 
   async function save(e: FormEvent) {
@@ -81,7 +97,7 @@ export default function Child({ me }: { me: Profile }) {
     if (!parts) return setErr('Write a note about what you want, or paste a link.')
     const row = {
       ...parts, estimated_price: price, product_url: url || null,
-      image_url: keepPreview ? form.image_url || null : null,
+      image_url: form.photo || keepPreview ? form.image_url || null : null,
       link_title: keepPreview ? form.link_title || null : null,
       link_site: keepPreview ? form.link_site || null : null,
     }
@@ -143,9 +159,22 @@ export default function Child({ me }: { me: Profile }) {
               inputMode="url" placeholder="Paste a store link" autoComplete="off" />
             <small>{looking ? 'Finding a picture…' : 'Paste a link and we will try to grab the picture.'}</small>
           </label>
-          {form.url.trim() && form.url.trim() === lastLooked.current && form.image_url && (
-            <div className="preview"><WishImage src={form.image_url} alt="" /><span>{form.link_site}</span></div>
+          {lookNote && !looking && <p className="muted">{lookNote}</p>}
+          {form.image_url && (form.photo || (form.url.trim() && form.url.trim() === lastLooked.current)) && (
+            <div className="preview">
+              <WishImage src={form.image_url} alt="" />
+              <span>{form.photo ? 'Your photo' : form.link_site}</span>
+              <button type="button" className="icon-btn" style={{ marginLeft: 'auto' }} aria-label="Remove picture"
+                onClick={() => setForm((f) => ({ ...f, image_url: '', photo: false }))}><Close size={16} /></button>
+            </div>
           )}
+          <div className="photo-row">
+            <label className="pill soft">
+              <Camera size={16} /> {uploading ? 'Adding photo…' : form.image_url ? 'Change photo' : 'Add a photo'}
+              <input type="file" accept="image/*" disabled={uploading} onChange={(e) => { pickPhoto(e.target.files?.[0]); e.target.value = '' }} />
+            </label>
+            <small className="muted">A screenshot of the toy works great.</small>
+          </div>
           <label className="field"><span>Notes</span>
             <textarea value={form.notes} onChange={set('notes')} maxLength={2000} rows={4} placeholder={'What do you want? Add color, size, or anything helpful.'} />
           </label>

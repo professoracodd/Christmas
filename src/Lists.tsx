@@ -1,16 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase, Profile, Item, ITEM_COLS, money } from './supabase'
 import { WishCard, Banner, toneFor } from './ui'
-import { Check, Gift, Sparkle } from './Icons'
+import { Check, ChevronLeft, Gift, Sparkle } from './Icons'
 
 type Kid = { id: string; display_name: string }
 
-// Shared list for parents and gift buyers. Kids never see purchase status (the database blocks it too).
+// Shared lists for parents and gift buyers. Kids never see purchase status (the database blocks it too).
+// Home shows the nutcracker with a button per kid; each kid's page has the progress bar and a "Still needed" filter.
 export default function Lists({ me }: { me: Profile }) {
   const [kids, setKids] = useState<Kid[]>([])
   const [items, setItems] = useState<Item[] | null>(null)
   const [bought, setBought] = useState<Record<string, boolean>>({})
-  const [filter, setFilter] = useState<string>('all')
+  const [kidId, setKidId] = useState<string | null>(null)
+  const [neededOnly, setNeededOnly] = useState(false)
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState<string | null>(null)
   const timer = useRef<number>()
@@ -41,6 +43,13 @@ export default function Lists({ me }: { me: Profile }) {
     return () => { supabase.removeChannel(ch); document.removeEventListener('visibilitychange', onFocus); window.clearTimeout(timer.current) }
   }, [])
 
+  // The home screen shows the whole nutcracker picture
+  useEffect(() => {
+    document.body.classList.toggle('home-view', kidId === null)
+    window.scrollTo(0, 0)
+    return () => document.body.classList.remove('home-view')
+  }, [kidId])
+
   async function toggle(i: Item) {
     const next = !bought[i.id]
     if (!next && !confirm(`Mark "${i.name}" as still needed? Others will see it as available again.`)) return
@@ -52,45 +61,68 @@ export default function Lists({ me }: { me: Profile }) {
   }
 
   const kidIndex = useMemo(() => Object.fromEntries(kids.map((k, n) => [k.id, n])), [kids])
-  const kidName = (id: string) => kids.find((k) => k.id === id)?.display_name ?? 'Kid'
   const all = items ?? []
-  const shown = all.filter((i) => filter === 'all' ? true : filter === 'needed' ? !bought[i.id] : i.child_id === filter)
-    .sort((a, b) => Number(!!bought[a.id]) - Number(!!bought[b.id]))
-  const got = all.filter((i) => bought[i.id]).length
-  const pct = all.length ? Math.round((got / all.length) * 100) : 0
-  const stillCost = all.filter((i) => !bought[i.id]).reduce((s, i) => s + (Number(i.estimated_price) || 0), 0)
+  const stillNeeded = (id: string) => all.filter((i) => i.child_id === id && !bought[i.id]).length
 
-  const chips = [{ id: 'all', label: 'All wishes' }, ...kids.map((k) => ({ id: k.id, label: k.display_name })), { id: 'needed', label: 'Still needed' }]
+  // ---------- Home ----------
+  if (kidId === null) {
+    return (
+      <>
+        <Banner err={err} />
+        <section className="home-panel" aria-label="Choose a wish list">
+          <h1>Whose list?</h1>
+          <div className="kid-picks">
+            {kids.map((k) => {
+              const n = stillNeeded(k.id)
+              return (
+                <button key={k.id} className={`kid-pick ${toneFor(kidIndex[k.id] ?? 0)}`} onClick={() => { setNeededOnly(false); setKidId(k.id) }}>
+                  <span className="kid-initial" aria-hidden="true">{k.display_name.slice(0, 1).toUpperCase()}</span>
+                  <span className="kid-text">
+                    <strong>{k.display_name}</strong>
+                    <small>{items === null ? 'Loading…' : n === 0 ? 'All set' : `${n} still needed`}</small>
+                  </span>
+                </button>
+              )
+            })}
+            {items !== null && kids.length === 0 && <p className="muted">No kids on the list yet.</p>}
+          </div>
+        </section>
+      </>
+    )
+  }
+
+  // ---------- One kid's list ----------
+  const kid = kids.find((k) => k.id === kidId)
+  const mine = all.filter((i) => i.child_id === kidId)
+  const shown = mine.filter((i) => !neededOnly || !bought[i.id]).sort((a, b) => Number(!!bought[a.id]) - Number(!!bought[b.id]))
+  const got = mine.filter((i) => bought[i.id]).length
+  const pct = mine.length ? Math.round((got / mine.length) * 100) : 0
+  const stillCost = mine.filter((i) => !bought[i.id]).reduce((s, i) => s + (Number(i.estimated_price) || 0), 0)
 
   return (
     <>
-      <section className="hero">
-        <div className="hero-row">
-          <div className="avatar" aria-hidden="true"><Gift size={28} /></div>
-          <div>
-            <h1>Wish Lists</h1>
-            <p>{items === null ? 'Loading…' : `${all.length} ${all.length === 1 ? 'wish' : 'wishes'} from ${kids.map((k) => k.display_name).join(' & ') || 'the kids'}`}</p>
+      <button className="back" onClick={() => setKidId(null)}><ChevronLeft size={18} /> All lists</button>
+      <section className="kid-head">
+        <div className="avatar small" aria-hidden="true">{kid?.display_name.slice(0, 1).toUpperCase()}</div>
+        <div className="kid-head-main">
+          <div className="kid-head-row">
+            <h1>{kid?.display_name}'s List</h1>
+            {mine.length > 0 && <span className="kid-count"><strong>{got} of {mine.length}</strong> bought</span>}
           </div>
-        </div>
-        {all.length > 0 && (
-          <div className="progress-box">
-            <div className="progress-label">
-              <span><strong>{got} of {all.length}</strong> gifts bought</span>
-              {stillCost > 0 && <span className="muted">{money(stillCost)} still on the lists</span>}
-            </div>
-            <div className="track" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label="Gifts bought">
+          {mine.length > 0 ? (
+            <div className="track slim" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label={`${got} of ${mine.length} gifts bought`}>
               <div className="fill" style={{ width: `${Math.max(pct, pct ? 6 : 0)}%` }} />
             </div>
-          </div>
-        )}
+          ) : <p className="muted">No wishes yet</p>}
+          {stillCost > 0 && <span className="muted tiny">{money(stillCost)} still on the list</span>}
+        </div>
       </section>
 
       <Banner err={err} />
 
       <div className="chips" role="group" aria-label="Filter wishes">
-        {chips.map((c) => (
-          <button key={c.id} className={`chip${filter === c.id ? ' on' : ''}`} aria-pressed={filter === c.id} onClick={() => setFilter(c.id)}>{c.label}</button>
-        ))}
+        <button className={`chip${!neededOnly ? ' on' : ''}`} aria-pressed={!neededOnly} onClick={() => setNeededOnly(false)}>All wishes</button>
+        <button className={`chip${neededOnly ? ' on' : ''}`} aria-pressed={neededOnly} onClick={() => setNeededOnly(true)}>Still needed</button>
       </div>
 
       <div className="wish-grid">
@@ -98,10 +130,7 @@ export default function Lists({ me }: { me: Profile }) {
           const done = !!bought[i.id]
           return (
             <WishCard key={i.id} item={i} faded={done}
-              top={<>
-                <span className={`tag ${toneFor(kidIndex[i.child_id] ?? 0)}`}>{kidName(i.child_id)}</span>
-                {done ? <span className="tag mint"><Check size={14} /> Bought</span> : <span className="tag plain"><Sparkle size={14} /> Still wished for</span>}
-              </>}
+              top={done ? <span className="tag mint"><Check size={14} /> Bought</span> : <span className="tag plain"><Sparkle size={14} /> Still wished for</span>}
               actions={done
                 ? <button className="pill soft" disabled={busy === i.id} onClick={() => toggle(i)}>Undo, still needed</button>
                 : <button className="pill primary" disabled={busy === i.id} onClick={() => toggle(i)}><Check size={16} /> I bought this</button>}
@@ -113,8 +142,8 @@ export default function Lists({ me }: { me: Profile }) {
       {items !== null && shown.length === 0 && (
         <div className="empty">
           <div className="empty-art"><Gift size={30} /></div>
-          <h3>{all.length === 0 ? 'No wishes yet' : filter === 'needed' ? 'Everything is bought!' : 'Nothing on this list yet'}</h3>
-          <p>{all.length === 0 ? 'When the kids add wishes from their links, they show up here.' : 'Try another filter above.'}</p>
+          <h3>{mine.length === 0 ? 'No wishes yet' : 'Everything is bought!'}</h3>
+          <p>{mine.length === 0 ? `When ${kid?.display_name ?? 'they'} adds wishes, they show up here.` : 'Nothing left on this list.'}</p>
         </div>
       )}
     </>
