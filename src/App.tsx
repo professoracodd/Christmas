@@ -1,10 +1,10 @@
-import { useEffect, useState, FormEvent, ReactNode } from 'react'
+import { useEffect, useRef, useState, FormEvent, ReactNode } from 'react'
 import { supabase, admin, startSession, configured, daysToChristmas, TITLE, Profile, BASE, asset } from './supabase'
 import Child from './Child'
 import Lists from './Lists'
 import People, { useIsOwner } from './People'
 import { Banner } from './ui'
-import { HelpIcon, List, Logout, Users } from './Icons'
+import { HelpIcon, List, Logout, SoundIcon, Users } from './Icons'
 
 type Mode = 'home' | 'setup' | 'owner'
 const ROLE_LABEL: Record<string, string> = { parent: 'Parent', gift_buyer: 'Gift buyer', child: 'Wish maker' }
@@ -111,6 +111,15 @@ const markTourSeen = () => { try { localStorage.setItem(TOUR_KEY, '1') } catch {
 
 function Help({ profile, welcome, onDone }: { profile: Profile; welcome: boolean; onDone: () => void }) {
   const showTour = profile.role !== 'child' // the tour shows shopping; kids get the written help only
+  const vid = useRef<HTMLVideoElement>(null)
+  const [needsSound, setNeedsSound] = useState(false)
+  // First visit: start the tour. Phones only allow autoplay without sound, so fall back to muted with a "Tap for music" button.
+  useEffect(() => {
+    const v = vid.current
+    if (!welcome || !v) return
+    v.muted = false
+    v.play().catch(() => { v.muted = true; setNeedsSound(true); v.play().catch(() => setNeedsSound(false)) })
+  }, [welcome])
   return (
     <>
       <section className="hero">
@@ -122,8 +131,16 @@ function Help({ profile, welcome, onDone }: { profile: Profile; welcome: boolean
       {showTour && (
         <div className="card tour">
           <h2>Quick tour</h2>
-          <video src={asset('tour.mp4')} poster={asset('tour-poster.jpg')} controls playsInline preload="metadata"
-            autoPlay={welcome} muted={welcome} aria-label="Video tour: picking a list, opening store folders and links, marking gifts bought, undoing, and adding the app to your home screen" />
+          <div className="tour-wrap">
+            <video ref={vid} src={asset('tour.mp4')} poster={asset('tour-poster.jpg')} controls playsInline preload="metadata"
+              onVolumeChange={(e) => { if (!e.currentTarget.muted) setNeedsSound(false) }}
+              aria-label="Video tour with music: picking a list, opening store folders and links, marking gifts bought, undoing, and adding the app to your home screen" />
+            {needsSound && (
+              <button className="sound-btn" onClick={() => { const v = vid.current; if (v) { v.muted = false; v.play().catch(() => {}) } setNeedsSound(false) }}>
+                <SoundIcon size={18} /> Tap for music
+              </button>
+            )}
+          </div>
           {welcome && <button className="pill primary block" onClick={onDone}>Start shopping</button>}
         </div>
       )}
