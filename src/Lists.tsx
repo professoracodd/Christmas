@@ -94,7 +94,8 @@ export default function Lists({ me }: { me: Profile }) {
   // ---------- One kid's list ----------
   const kid = kids.find((k) => k.id === kidId)
   const mine = all.filter((i) => i.child_id === kidId)
-  const shown = mine.filter((i) => !neededOnly || !bought[i.id]).sort((a, b) => Number(!!bought[a.id]) - Number(!!bought[b.id]))
+  const needed = mine.filter((i) => !bought[i.id])
+  const boughtList = mine.filter((i) => bought[i.id])
   const got = mine.filter((i) => bought[i.id]).length
   const pct = mine.length ? Math.round((got / mine.length) * 100) : 0
   const stillCost = mine.filter((i) => !bought[i.id]).reduce((s, i) => s + (Number(i.estimated_price) || 0), 0)
@@ -125,29 +126,41 @@ export default function Lists({ me }: { me: Profile }) {
         <button className={`chip${neededOnly ? ' on' : ''}`} aria-pressed={neededOnly} onClick={() => setNeededOnly(true)}>Still needed</button>
       </div>
 
-      <StoreGroups items={shown}
-        summary={(list) => {
-          const need = list.filter((i) => !bought[i.id]).length
-          return need === list.length ? `${need} still needed` : need === 0 ? `All ${list.length} bought` : `${need} still needed · ${list.length - need} bought`
-        }}
-        render={(i) => {
-          const done = !!bought[i.id]
-          return (
-            <WishCard key={i.id} item={i} faded={done}
-              top={done ? <span className="tag mint"><Check size={14} /> Bought</span> : <span className="tag plain"><Sparkle size={14} /> Still wished for</span>}
-              actions={done
-                ? <button className="pill soft" disabled={busy === i.id} onClick={() => toggle(i)}>Undo, still needed</button>
-                : <button className="pill primary" disabled={busy === i.id} onClick={() => toggle(i)}><Check size={16} /> I bought this</button>}
-            />
-          )
-        }} />
-
-      {items !== null && shown.length === 0 && (
+      {items !== null && needed.length === 0 && (
         <div className="empty">
           <div className="empty-art"><Gift size={30} /></div>
           <h3>{mine.length === 0 ? 'No wishes yet' : 'Everything is bought!'}</h3>
           <p>{mine.length === 0 ? `When ${kid?.display_name ?? 'they'} adds wishes, they show up here.` : 'Nothing left on this list.'}</p>
         </div>
+      )}
+
+      {/* Still wanted, by store */}
+      <StoreGroups items={needed}
+        summary={(list) => `${list.length} still needed`}
+        render={(i) => (
+          <WishCard key={i.id} item={i}
+            top={<span className="tag plain"><Sparkle size={14} /> Still wished for</span>}
+            actions={<button className="pill primary" disabled={busy === i.id} onClick={() => toggle(i)}><Check size={16} /> I bought this</button>}
+          />
+        )} />
+
+      {/* Bought gifts in their own folder, so undoing one doesn't mean scrolling past everything */}
+      {!neededOnly && boughtList.length > 0 && (
+        <details className="store bought-folder">
+          <summary>
+            <span className="store-badge" aria-hidden="true"><Check size={22} /></span>
+            <span className="store-name"><strong>Bought</strong><small>{boughtList.length} {boughtList.length === 1 ? 'gift' : 'gifts'} already taken care of</small></span>
+            <svg className="store-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+          </summary>
+          <div className="wish-grid store-items">
+            {boughtList.map((i) => (
+              <WishCard key={i.id} item={i} faded
+                top={<span className="tag mint"><Check size={14} /> Bought</span>}
+                actions={<button className="pill soft" disabled={busy === i.id} onClick={() => toggle(i)}>Undo, still needed</button>}
+              />
+            ))}
+          </div>
+        </details>
       )}
     </>
   )

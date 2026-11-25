@@ -267,3 +267,6 @@ body.home-view .shell::after { background: url('/bg.jpg') center calc(70px + env
 .store[open] .store-chevron { transform: rotate(180deg); }
 .store-items { padding: 4px 12px 14px; }
 .store-items .wish { box-shadow: 0 4px 14px -4px rgba(74, 62, 71, .22), inset 0 0 0 1px rgba(216, 193, 198, .5); }
+
+.bought-folder { margin-top: 12px; }
+.bought-folder .store-badge { background: var(--mint) !important; color: var(--mint-ink) !important; }
