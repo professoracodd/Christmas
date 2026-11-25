@@ -91,13 +91,12 @@ export function StoreGroups({ items, render, summary }: { items: Item[]; render:
   const groups = new Map<string, Item[]>()
   for (const i of items) { const s = storeOf(i); groups.set(s, [...(groups.get(s) ?? []), i]) }
   const names = [...groups.keys()].sort((a, b) => (a === 'Other wishes' ? 1 : b === 'Other wishes' ? -1 : groups.get(b)!.length - groups.get(a)!.length || a.localeCompare(b)))
-  const single = names.length === 1
   return (
     <div className="stores">
       {names.map((name) => {
         const list = groups.get(name)!
         return (
-          <details key={name} className="store" open={single}>
+          <details key={name} className="store">
             <summary>
               <span className="store-badge" aria-hidden="true">{name === 'Other wishes' ? '+' : name.charAt(0)}</span>
               <span className="store-name"><strong>{name}</strong><small>{summary ? summary(list) : `${list.length} ${list.length === 1 ? 'wish' : 'wishes'}`}</small></span>
