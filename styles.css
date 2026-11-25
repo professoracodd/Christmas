@@ -21,3 +21,8 @@ button:disabled { opacity:.6; }
 .items p { margin:2px 0; color:var(--muted); } .price { color:var(--muted); }
 .error { color:var(--berry); font-weight:600; } .notice { background:#e8f1ed; border:1px solid var(--spruce); border-radius:8px; padding:10px 12px; }
 .itemform { border:1px solid var(--line); border-radius:8px; padding:12px; margin:12px 0; }
+.btn { display:inline-block; font:inherit; padding:9px 14px; border-radius:8px; border:1px solid var(--line); background:#fff; color:var(--ink); text-decoration:none; min-height:44px; line-height:1.6; }
+.btn.primary { background:var(--spruce); border-color:var(--spruce); color:#fff; font-weight:600; }
+
+.addform { display:flex; gap:8px; } .addform input { flex:1; min-width:0; } .addform select { font:inherit; padding:8px; border:1px solid var(--line); border-radius:8px; background:#fff; }
+.hint { color:var(--muted); margin:4px 0 0; }

@@ -1,78 +1,47 @@
 import { useEffect, useState, FormEvent } from 'react'
-import { supabase, admin, CHILD_DOMAIN, Profile } from './supabase'
+import { supabase, admin, startSession, TITLE, Profile } from './supabase'
 import Child from './Child'
-import Parents from './Parents'
+import People from './People'
 
-type Mode = 'login' | 'child' | 'setup' | 'join'
+type Mode = 'home' | 'setup' | 'owner'
 
-function Field(p: { label: string; value: string; set: (v: string) => void; type?: string; hint?: string; inputMode?: 'numeric' }) {
-  return (
-    <label className="field">
-      <span>{p.label}</span>
-      <input type={p.type || 'text'} value={p.value} onChange={(e) => p.set(e.target.value)} required inputMode={p.inputMode} autoComplete="off" />
-      {p.hint && <small>{p.hint}</small>}
-    </label>
-  )
-}
-
-function Auth() {
-  const [mode, setMode] = useState<Mode>('login')
+function Auth({ problem }: { problem: string }) {
+  const [mode, setMode] = useState<Mode>('home')
   const [f, setF] = useState<Record<string, string>>({})
-  const [err, setErr] = useState('')
+  const [err, setErr] = useState(problem)
   const [busy, setBusy] = useState(false)
-  const set = (k: string) => (v: string) => setF((s) => ({ ...s, [k]: v }))
-  const go = (m: Mode) => { setMode(m); setErr('') }
-
-  async function signIn(email: string, password: string) {
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
-    if (error) throw new Error('That login did not work. Check it and try again.')
-  }
+  useEffect(() => { if (problem) setErr(problem) }, [problem])
+  const set = (k: string) => (e: any) => setF((s) => ({ ...s, [k]: e.target.value }))
 
   async function submit(e: FormEvent) {
     e.preventDefault()
     setBusy(true); setErr('')
     try {
-      if (mode === 'login') await signIn(f.email.trim(), f.password)
-      else if (mode === 'child') await signIn(`${f.username.trim().toLowerCase()}@${CHILD_DOMAIN}`, f.pin)
-      else if (mode === 'setup') {
-        await admin({ action: 'bootstrap', setup_code: f.code, family_name: f.family, display_name: f.name, email: f.email, password: f.password })
-        await signIn(f.email.trim(), f.password)
-      } else {
-        await admin({ action: 'accept_invite', code: f.code, display_name: f.name, email: f.email, password: f.password })
-        await signIn(f.email.trim(), f.password)
-      }
+      await startSession(await admin(mode === 'setup'
+        ? { action: 'bootstrap', setup_code: f.code, name: f.name }
+        : { action: 'owner_login', setup_code: f.code }))
     } catch (x: any) { setErr(x.message) }
     setBusy(false)
   }
+  const go = (m: Mode) => { setMode(m); setErr('') }
 
   return (
     <main className="card narrow">
-      <h1>Family Christmas Lists</h1>
-      <div className="tabs">
-        <button className={mode === 'login' ? 'on' : ''} onClick={() => go('login')}>Parent or gift buyer</button>
-        <button className={mode === 'child' ? 'on' : ''} onClick={() => go('child')}>Kid login</button>
-      </div>
-      <form onSubmit={submit}>
-        {mode === 'login' && <><Field label="Email" type="email" value={f.email || ''} set={set('email')} /><Field label="Password" type="password" value={f.password || ''} set={set('password')} /></>}
-        {mode === 'child' && <><Field label="Your username" value={f.username || ''} set={set('username')} /><Field label="Your 6-digit PIN" type="password" inputMode="numeric" value={f.pin || ''} set={set('pin')} /></>}
-        {mode === 'setup' && <>
-          <Field label="Setup code" type="password" value={f.code || ''} set={set('code')} hint="The code you saved as SETUP_CODE in Supabase" />
-          <Field label="Family name" value={f.family || ''} set={set('family')} />
-          <Field label="Your name" value={f.name || ''} set={set('name')} />
-          <Field label="Email" type="email" value={f.email || ''} set={set('email')} />
-          <Field label="Password" type="password" value={f.password || ''} set={set('password')} hint="At least 8 characters" /></>}
-        {mode === 'join' && <>
-          <Field label="Invite code" value={f.code || ''} set={set('code')} />
-          <Field label="Your name" value={f.name || ''} set={set('name')} />
-          <Field label="Email" type="email" value={f.email || ''} set={set('email')} />
-          <Field label="Password" type="password" value={f.password || ''} set={set('password')} hint="At least 8 characters" /></>}
-        {err && <p className="error" role="alert">{err}</p>}
-        <button className="primary" disabled={busy}>{busy ? 'Working…' : mode === 'setup' ? 'Create family' : mode === 'join' ? 'Join family' : 'Sign in'}</button>
-      </form>
-      {(mode === 'login' || mode === 'child') && (
-        <p className="links"><button onClick={() => go('join')}>I have an invite code</button><button onClick={() => go('setup')}>Set up a new family</button></p>
+      <h1>{TITLE}</h1>
+      {err && <p className="error" role="alert">{err}</p>}
+      {mode === 'home' ? (
+        <>
+          <p>Open your personal link from the text message you were sent. It signs you in on this phone.</p>
+          <p className="links"><button onClick={() => go('owner')}>Owner sign-in</button><button onClick={() => go('setup')}>First-time setup</button></p>
+        </>
+      ) : (
+        <form onSubmit={submit}>
+          <label className="field"><span>Setup code</span><input type="password" value={f.code || ''} onChange={set('code')} required autoComplete="off" /><small>The code you saved as SETUP_CODE in Supabase</small></label>
+          {mode === 'setup' && <label className="field"><span>Your name</span><input value={f.name || ''} onChange={set('name')} required maxLength={60} /></label>}
+          <button className="primary" disabled={busy}>{busy ? 'Working…' : mode === 'setup' ? 'Create' : 'Sign in'}</button>
+          <p className="links"><button type="button" onClick={() => go('home')}>Back</button></p>
+        </form>
       )}
-      {(mode === 'setup' || mode === 'join') && <p className="links"><button onClick={() => go('login')}>Back to sign in</button></p>}
     </main>
   )
 }
@@ -80,6 +49,15 @@ function Auth() {
 export default function App() {
   const [uid, setUid] = useState<string | null | undefined>(undefined)
   const [profile, setProfile] = useState<Profile | null>(null)
+  const [problem, setProblem] = useState('')
+
+  // Personal link: https://site/#k=TOKEN signs this phone in, then the token is removed from the address bar
+  useEffect(() => {
+    const m = window.location.hash.match(/^#k=([A-Za-z0-9]+)$/)
+    if (!m) return
+    window.history.replaceState(null, '', window.location.pathname + window.location.search)
+    admin({ action: 'link_login', token: m[1] }).then(startSession).catch((e) => setProblem(e.message))
+  }, [])
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setUid(data.session?.user.id ?? null))
@@ -94,7 +72,7 @@ export default function App() {
   }, [uid])
 
   if (uid === undefined) return <main className="card narrow"><p>Loading…</p></main>
-  if (!uid) return <Auth />
+  if (!uid) return <Auth problem={problem} />
   if (!profile) return <main className="card narrow"><p>Loading your account…</p></main>
 
   return (
@@ -105,8 +83,8 @@ export default function App() {
       </header>
       {profile.role === 'child' ? <Child me={profile} /> : (
         <main>
-          <section className="card"><h2>Family wish lists</h2><p>The shared list view with purchase status is the next piece we build.</p></section>
-          {profile.role === 'parent' && <Parents />}
+          <section className="card"><h2>Wish lists</h2><p>The shared list with purchase status is the next piece we build.</p></section>
+          {profile.role === 'parent' && <People />}
         </main>
       )}
     </div>
