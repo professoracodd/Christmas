@@ -1,7 +1,7 @@
 import { useEffect, useState, FormEvent } from 'react'
 import { admin, personalLink, TITLE, Profile } from './supabase'
 import { Banner } from './ui'
-import { Copy, Message, Refresh, Users } from './Icons'
+import { Copy, Message, Refresh, Trash, Users } from './Icons'
 
 type Person = { id: string; name: string; role: string; token: string | null }
 const ROLE = { parent: 'Parent', gift_buyer: 'Gift buyer', child: 'Kid' } as Record<string, string>
@@ -36,6 +36,12 @@ export default function People({ me, people, reload }: { me: Profile; people: Pe
     setErr(''); setNote('')
     try { await admin({ action: 'reset_link', person_id: p.id }); setNote(`New link ready for ${p.name}.`); reload() } catch (x: any) { setErr(x.message) }
   }
+  async function removePerson(p: Person) {
+    const extra = p.role === 'child' ? ` Their whole wish list will be deleted too.` : ` Their link will stop working.`
+    if (!confirm(`Remove ${p.name}?${extra} This can't be undone.`)) return
+    setErr(''); setNote('')
+    try { await admin({ action: 'delete_person', person_id: p.id }); setNote(`${p.name} was removed.`); reload() } catch (x: any) { setErr(x.message) }
+  }
   async function copy(p: Person) {
     setErr(''); setNote('')
     try { await navigator.clipboard.writeText(personalLink(p.token!)); setNote(`${p.name}'s link copied.`) }
@@ -64,6 +70,7 @@ export default function People({ me, people, reload }: { me: Profile; people: Pe
               {p.token && <a className="pill primary" href={smsHref(p)}><Message size={16} /> Text link</a>}
               {p.token && <button className="pill soft" onClick={() => copy(p)}><Copy size={16} /> Copy</button>}
               <button className="pill ghost" onClick={() => renew(p)}><Refresh size={16} /> New link</button>
+              <button className="pill ghost danger" onClick={() => removePerson(p)}><Trash size={16} /> Remove</button>
             </div>}
           </li>
         ))}
