@@ -12,7 +12,7 @@ export default function Lists({ me }: { me: Profile }) {
   const [items, setItems] = useState<Item[] | null>(null)
   const [bought, setBought] = useState<Record<string, boolean>>({})
   const [kidId, setKidId] = useState<string | null>(null)
-  const [neededOnly, setNeededOnly] = useState(false)
+  const [view, setView] = useState<'needed' | 'bought'>('needed')
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState<string | null>(null)
   const timer = useRef<number>()
@@ -75,7 +75,7 @@ export default function Lists({ me }: { me: Profile }) {
             {kids.map((k) => {
               const n = stillNeeded(k.id)
               return (
-                <button key={k.id} className={`kid-pick ${toneFor(kidIndex[k.id] ?? 0)}`} onClick={() => { setNeededOnly(false); setKidId(k.id) }}>
+                <button key={k.id} className={`kid-pick ${toneFor(kidIndex[k.id] ?? 0)}`} onClick={() => { setView('needed'); setKidId(k.id) }}>
                   <span className="kid-initial" aria-hidden="true">{k.display_name.slice(0, 1).toUpperCase()}</span>
                   <span className="kid-text">
                     <strong>{k.display_name}</strong>
@@ -122,45 +122,37 @@ export default function Lists({ me }: { me: Profile }) {
       <Banner err={err} />
 
       <div className="chips" role="group" aria-label="Filter wishes">
-        <button className={`chip${!neededOnly ? ' on' : ''}`} aria-pressed={!neededOnly} onClick={() => setNeededOnly(false)}>All wishes</button>
-        <button className={`chip${neededOnly ? ' on' : ''}`} aria-pressed={neededOnly} onClick={() => setNeededOnly(true)}>Still needed</button>
+        <button className={`chip${view === 'needed' ? ' on' : ''}`} aria-pressed={view === 'needed'} onClick={() => setView('needed')}>Still needed ({needed.length})</button>
+        <button className={`chip${view === 'bought' ? ' on' : ''}`} aria-pressed={view === 'bought'} onClick={() => setView('bought')}>Bought ({boughtList.length})</button>
       </div>
 
-      {items !== null && needed.length === 0 && (
+      {items !== null && (view === 'needed' ? needed : boughtList).length === 0 && (
         <div className="empty">
           <div className="empty-art"><Gift size={30} /></div>
-          <h3>{mine.length === 0 ? 'No wishes yet' : 'Everything is bought!'}</h3>
-          <p>{mine.length === 0 ? `When ${kid?.display_name ?? 'they'} adds wishes, they show up here.` : 'Nothing left on this list.'}</p>
+          <h3>{mine.length === 0 ? 'No wishes yet' : view === 'needed' ? 'Everything is bought!' : 'Nothing bought yet'}</h3>
+          <p>{mine.length === 0 ? `When ${kid?.display_name ?? 'they'} adds wishes, they show up here.`
+            : view === 'needed' ? 'Nothing left on this list.' : 'Tap "I bought this" on a gift and it moves here.'}</p>
         </div>
       )}
 
-      {/* Still wanted, by store */}
-      <StoreGroups items={needed}
-        summary={(list) => `${list.length} still needed`}
-        render={(i) => (
-          <WishCard key={i.id} item={i}
-            top={<span className="tag plain"><Sparkle size={14} /> Still wished for</span>}
-            actions={<button className="pill primary" disabled={busy === i.id} onClick={() => toggle(i)}><Check size={16} /> I bought this</button>}
-          />
-        )} />
-
-      {/* Bought gifts in their own folder, so undoing one doesn't mean scrolling past everything */}
-      {!neededOnly && boughtList.length > 0 && (
-        <details className="store bought-folder">
-          <summary>
-            <span className="store-badge" aria-hidden="true"><Check size={22} /></span>
-            <span className="store-name"><strong>Bought</strong><small>{boughtList.length} {boughtList.length === 1 ? 'gift' : 'gifts'} already taken care of</small></span>
-            <svg className="store-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
-          </summary>
-          <div className="wish-grid store-items">
-            {boughtList.map((i) => (
-              <WishCard key={i.id} item={i} faded
-                top={<span className="tag mint"><Check size={14} /> Bought</span>}
-                actions={<button className="pill soft" disabled={busy === i.id} onClick={() => toggle(i)}>Undo, still needed</button>}
-              />
-            ))}
-          </div>
-        </details>
+      {view === 'needed' ? (
+        <StoreGroups key="needed" items={needed}
+          summary={(list) => `${list.length} still needed`}
+          render={(i) => (
+            <WishCard key={i.id} item={i}
+              top={<span className="tag plain"><Sparkle size={14} /> Still wished for</span>}
+              actions={<button className="pill primary" disabled={busy === i.id} onClick={() => toggle(i)}><Check size={16} /> I bought this</button>}
+            />
+          )} />
+      ) : (
+        <StoreGroups key="bought" items={boughtList}
+          summary={(list) => `${list.length} bought`}
+          render={(i) => (
+            <WishCard key={i.id} item={i}
+              top={<span className="tag mint"><Check size={14} /> Bought</span>}
+              actions={<button className="pill soft" disabled={busy === i.id} onClick={() => toggle(i)}>Undo, still needed</button>}
+            />
+          )} />
       )}
     </>
   )
