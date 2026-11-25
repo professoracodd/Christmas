@@ -181,10 +181,10 @@ export default function Child({ me }: { me: Profile }) {
 
       <div className="fab-wrap">
         <button className="fab" onClick={() => edit()}><Plus size={22} /> Add a wish</button>
-        <button className="fab fab-small" onClick={() => { setBulkMsg(''); setBulkOpen(true) }}><LinkOut size={18} /> Add links</button>
+        <button className="fab fab-small" onClick={() => { setBulkMsg(''); setBulkOpen(true) }}><LinkOut size={18} /> Add bulk links</button>
       </div>
 
-      <Sheet open={bulkOpen} title="Add several links" onClose={() => !bulkBusy && setBulkOpen(false)}>
+      <Sheet open={bulkOpen} title="Add bulk links" onClose={() => !bulkBusy && setBulkOpen(false)}>
         <div className="form">
           <label className="field"><span>Paste links</span>
             <textarea value={bulkText} onChange={(e) => setBulkText(e.target.value)} rows={6} disabled={bulkBusy}
