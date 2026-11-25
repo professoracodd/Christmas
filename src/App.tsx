@@ -1,0 +1,176 @@
+import { useEffect, useState, FormEvent, ReactNode } from 'react'
+import { supabase, admin, startSession, configured, daysToChristmas, TITLE, Profile } from './supabase'
+import Child from './Child'
+import Lists from './Lists'
+import People, { useIsOwner } from './People'
+import { Banner } from './ui'
+import { List, Logout, Phone, Snowflake, Users } from './Icons'
+
+type Mode = 'home' | 'setup' | 'owner'
+const ROLE_LABEL: Record<string, string> = { parent: 'Parent', gift_buyer: 'Gift buyer', child: 'Wish maker' }
+
+// iPhone home-screen apps keep their own storage, so the shortcut has to carry the personal link.
+// Without a manifest, iOS saves the exact page address (including #k=...) as the shortcut.
+if (/iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) {
+  if (window.location.hash.startsWith('#k=')) document.getElementById('manifest')?.remove()
+}
+
+function Splash({ children }: { children: ReactNode }) {
+  return (
+    <main className="splash">
+      <div className="card auth">
+        <img src="./icon-192.png" alt="" className="auth-logo" width={88} height={88} />
+        <h1>{TITLE}</h1>
+        {children}
+      </div>
+    </main>
+  )
+}
+
+function Auth({ problem }: { problem: string }) {
+  const [mode, setMode] = useState<Mode>('home')
+  const [f, setF] = useState<Record<string, string>>({})
+  const [err, setErr] = useState(problem)
+  const [busy, setBusy] = useState(false)
+  useEffect(() => { if (problem) setErr(problem) }, [problem])
+  const set = (k: string) => (e: any) => setF((s) => ({ ...s, [k]: e.target.value }))
+
+  async function submit(e: FormEvent) {
+    e.preventDefault()
+    setBusy(true); setErr('')
+    try {
+      await startSession(await admin(mode === 'setup'
+        ? { action: 'bootstrap', setup_code: f.code, name: f.name }
+        : { action: 'owner_login', setup_code: f.code }))
+    } catch (x: any) { setErr(x.message) }
+    setBusy(false)
+  }
+  const go = (m: Mode) => { setMode(m); setErr('') }
+
+  return (
+    <Splash>
+      <Banner err={err} />
+      {mode === 'home' ? (
+        <>
+          <p className="lead">Open your personal link from the text message you were sent. It signs you in on this phone.</p>
+          <div className="text-links"><button onClick={() => go('owner')}>Owner sign-in</button><button onClick={() => go('setup')}>First-time setup</button></div>
+        </>
+      ) : (
+        <form onSubmit={submit} className="form">
+          <label className="field"><span>Setup code</span><input type="password" value={f.code || ''} onChange={set('code')} required autoComplete="off" /><small>The code you saved as SETUP_CODE in Supabase</small></label>
+          {mode === 'setup' && <label className="field"><span>Your name</span><input value={f.name || ''} onChange={set('name')} required maxLength={60} /></label>}
+          <button className="pill primary block" disabled={busy}>{busy ? 'Working…' : mode === 'setup' ? 'Create the list' : 'Sign in'}</button>
+          <div className="text-links"><button type="button" onClick={() => go('home')}>Back</button></div>
+        </form>
+      )}
+    </Splash>
+  )
+}
+
+function Install() {
+  return (
+    <>
+      <section className="hero">
+        <div className="hero-row">
+          <div className="avatar" aria-hidden="true"><Phone size={28} /></div>
+          <div><h1>Add to Home Screen</h1><p>Open it like an app, already signed in.</p></div>
+        </div>
+      </section>
+      <div className="card help">
+        <h2>iPhone (Safari)</h2>
+        <p>Tap the Share button, then <strong>Add to Home Screen</strong>, then <strong>Add</strong>.</p>
+        <h2>Android (Chrome)</h2>
+        <p>Tap the menu (three dots), then <strong>Add to Home screen</strong> or <strong>Install app</strong>.</p>
+        <p className="muted">Do this right after opening your personal link from the text message, so the shortcut stays signed in.</p>
+      </div>
+    </>
+  )
+}
+
+type Tab = 'lists' | 'people' | 'install'
+
+function Home({ profile }: { profile: Profile }) {
+  const [tab, setTab] = useState<Tab>('lists')
+  // Only parents ask for the people list; the backend decides which parent is the owner
+  const owner = useIsOwner(profile.role === 'parent')
+  const days = daysToChristmas()
+  const tabs: { id: Tab; label: string; icon: ReactNode }[] = [
+    { id: 'lists', label: profile.role === 'child' ? 'My List' : 'Wish Lists', icon: <List size={24} /> },
+    ...(owner.people ? [{ id: 'people' as Tab, label: 'People', icon: <Users size={24} /> }] : []),
+    { id: 'install', label: 'Add to Phone', icon: <Phone size={24} /> },
+  ]
+  useEffect(() => { window.scrollTo(0, 0) }, [tab])
+
+  return (
+    <div className="shell">
+      <header className="topbar">
+        <div className="brand">
+          <img src="./icon-192.png" alt="" width={36} height={36} />
+          <div><strong>{TITLE}</strong><span>{profile.display_name} · {ROLE_LABEL[profile.role]}</span></div>
+        </div>
+        <div className="top-right">
+          <span className="countdown"><Snowflake size={14} /> {days === 0 ? 'Merry Christmas!' : `${days} ${days === 1 ? 'day' : 'days'}`}</span>
+          <button className="icon-btn" onClick={() => supabase.auth.signOut()} aria-label="Sign out" title="Sign out"><Logout size={18} /></button>
+        </div>
+      </header>
+      <main className="content">
+        {tab === 'lists' && (profile.role === 'child' ? <Child me={profile} /> : <Lists me={profile} />)}
+        {tab === 'people' && owner.people && <People people={owner.people} reload={owner.reload} />}
+        {tab === 'install' && <Install />}
+      </main>
+      <nav className="bottom-nav" aria-label="Sections">
+        {tabs.map((t) => (
+          <button key={t.id} className={tab === t.id ? 'on' : ''} aria-current={tab === t.id ? 'page' : undefined} onClick={() => setTab(t.id)}>
+            {t.icon}<span>{t.label}</span>
+          </button>
+        ))}
+      </nav>
+    </div>
+  )
+}
+
+export default function App() {
+  const [uid, setUid] = useState<string | null | undefined>(undefined)
+  const [profile, setProfile] = useState<Profile | null>(null)
+  const [profileErr, setProfileErr] = useState(false)
+  const [problem, setProblem] = useState('')
+
+  // Personal link: https://site/#k=TOKEN signs this phone in. The link stays in the address bar so a home-screen shortcut made from it can sign in too.
+  useEffect(() => {
+    if (!configured) return
+    const m = window.location.hash.match(/^#k=([A-Za-z0-9]+)$/)
+    if (!m) return
+    admin({ action: 'link_login', token: m[1] }).then(startSession).catch((e) => setProblem(e.message))
+  }, [])
+
+  useEffect(() => {
+    if (!configured) return
+    supabase.auth.getSession().then(({ data }) => setUid(data.session?.user.id ?? null))
+    const { data } = supabase.auth.onAuthStateChange((_e, s) => setUid(s?.user.id ?? null))
+    return () => data.subscription.unsubscribe()
+  }, [])
+
+  useEffect(() => {
+    setProfile(null); setProfileErr(false)
+    if (!uid) return
+    supabase.from('profiles').select('id, family_id, display_name, role').eq('id', uid).maybeSingle()
+      .then(({ data, error }) => { if (error || !data) setProfileErr(true); else setProfile(data as Profile) })
+  }, [uid])
+
+  if (!configured) return (
+    <Splash>
+      <p className="error">This site was built without its Supabase settings.</p>
+      <p className="lead">In GitHub, add the repository variables <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_PUBLISHABLE_KEY</code>, then run the deploy again.</p>
+    </Splash>
+  )
+  if (uid === undefined) return <Splash><p className="lead">Loading…</p></Splash>
+  if (!uid) return <Auth problem={problem} />
+  if (profileErr) return (
+    <Splash>
+      <p className="error">This sign-in isn't connected to anyone on the list.</p>
+      <button className="pill soft block" onClick={() => supabase.auth.signOut()}>Sign out</button>
+    </Splash>
+  )
+  if (!profile) return <Splash><p className="lead">Loading your account…</p></Splash>
+  return <Home key={profile.id} profile={profile} />
+}
