@@ -9,15 +9,30 @@ import { HelpIcon, List, Logout, Users } from './Icons'
 type Mode = 'home' | 'setup' | 'owner'
 const ROLE_LABEL: Record<string, string> = { parent: 'Parent', gift_buyer: 'Gift buyer', child: 'Wish maker' }
 
-// If a shortcut or old link lands on a wrong address (GitHub shows our 404 copy of the app), move back home, keeping #k=...
-if (window.location.pathname !== BASE) {
-  window.history.replaceState(null, '', BASE + window.location.hash)
+// Personal links come as #k=TOKEN (texted) or ?k=TOKEN (home-screen shortcut)
+const TOKEN_RE = /^[A-Za-z0-9]{20,100}$/
+function tokenFromUrl(): string | null {
+  const h = window.location.hash.match(/^#k=([A-Za-z0-9]+)$/)?.[1]
+  const q = new URLSearchParams(window.location.search).get('k')
+  const t = h || q
+  return t && TOKEN_RE.test(t) ? t : null
+}
+export function tokenFromText(text: string): string | null {
+  const m = text.trim().match(/[#?&]k=([A-Za-z0-9]+)/)?.[1] ?? text.trim()
+  return TOKEN_RE.test(m) ? m : null
 }
 
-// iPhone home-screen apps keep their own storage, so the shortcut has to carry the personal link.
-// Without a manifest, iOS saves the exact page address (including #k=...) as the shortcut.
-if (/iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) {
-  if (window.location.hash.startsWith('#k=')) document.getElementById('manifest')?.remove()
+// Keep the link in the address as ?k=TOKEN on the app's home address. iPhones save exactly this address
+// for a home-screen icon (home-screen apps there have their own storage, so the icon must carry the link).
+const START_TOKEN = tokenFromUrl()
+if (window.location.pathname !== BASE || window.location.hash.startsWith('#k=')) {
+  window.history.replaceState(null, '', BASE + (START_TOKEN ? `?k=${START_TOKEN}` : window.location.search) + (window.location.hash.startsWith('#k=') ? '' : window.location.hash))
+}
+
+// The install manifest is only for Android/desktop: on iPhone it would make the icon open the bare address without the link
+const IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+if (!IOS) {
+  const l = document.createElement('link'); l.rel = 'manifest'; l.href = asset('manifest.webmanifest'); document.head.appendChild(l)
 }
 
 function Splash({ children }: { children: ReactNode }) {
@@ -52,12 +67,30 @@ function Auth({ problem }: { problem: string }) {
   }
   const go = (m: Mode) => { setMode(m); setErr('') }
 
+  async function pasteLink(e: FormEvent) {
+    e.preventDefault()
+    const token = tokenFromText(f.link || '')
+    if (!token) return setErr("That doesn't look like a personal link. Copy the whole link from the text message.")
+    setBusy(true); setErr('')
+    try {
+      await startSession(await admin({ action: 'link_login', token }))
+      window.history.replaceState(null, '', `${BASE}?k=${token}`) // so a home-screen icon made now keeps the link
+    } catch (x: any) { setErr(x.message) }
+    setBusy(false)
+  }
+
   return (
     <Splash>
       <Banner err={err} />
       {mode === 'home' ? (
         <>
           <p className="lead">Open your personal link from the text message you were sent. It signs you in on this phone.</p>
+          <form className="form" onSubmit={pasteLink}>
+            <label className="field"><span>Or paste your personal link</span>
+              <input value={f.link || ''} onChange={set('link')} placeholder="https://…#k=…" autoComplete="off" inputMode="url" />
+            </label>
+            <button className="pill primary block" disabled={busy || !f.link}>{busy ? 'Signing in…' : 'Sign in with my link'}</button>
+          </form>
           <div className="text-links"><button onClick={() => go('owner')}>Owner sign-in</button><button onClick={() => go('setup')}>First-time setup</button></div>
         </>
       ) : (
@@ -165,10 +198,8 @@ export default function App() {
 
   // Personal link: https://site/#k=TOKEN signs this phone in. The link stays in the address bar so a home-screen shortcut made from it can sign in too.
   useEffect(() => {
-    if (!configured) return
-    const m = window.location.hash.match(/^#k=([A-Za-z0-9]+)$/)
-    if (!m) return
-    admin({ action: 'link_login', token: m[1] }).then(startSession).catch((e) => setProblem(e.message))
+    if (!configured || !START_TOKEN) return
+    admin({ action: 'link_login', token: START_TOKEN }).then(startSession).catch((e) => setProblem(e.message))
   }, [])
 
   useEffect(() => {
