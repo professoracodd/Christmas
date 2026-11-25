@@ -2,7 +2,7 @@
 // Links hold a long random token (hashed for sign-in lookups, encrypted so the owner can re-send them).
 //
 // Public:  bootstrap (needs SETUP_CODE; also creates Eli and Jazz; only works once), owner_login (needs SETUP_CODE), link_login
-// Owner-only (the first parent, i.e. mom): add_person, reset_link, list_people (includes each person's link)
+// Owner-only (the first parent, i.e. mom): add_person, reset_link, list_people (includes each person's link), delete_person
 // Any signed-in person: link_preview (reads a store page's title and picture for a wish card)
 //
 // Deploy with JWT verification OFF (supabase/config.toml, or the toggle in the dashboard): this code checks sign-in itself.
@@ -172,6 +172,20 @@ async function resetLink(req: Request, body: Record<string, unknown>) {
   return { id: person.id, name: person.display_name, token };
 }
 
+// Removes someone completely: their sign-in, profile, link and (for a kid) their wishes and uploaded photos
+async function deletePerson(req: Request, body: Record<string, unknown>) {
+  const owner = await requireOwner(req);
+  const personId = str(body.person_id, 36, 36, "person_id");
+  if (personId === owner.id) throw new HttpError(400, "You can't remove the owner account");
+  const { data: person } = await admin.from("profiles").select("id, display_name").eq("id", personId).eq("family_id", owner.family_id).maybeSingle();
+  if (!person) throw new HttpError(404, "Person not found");
+  const { data: files } = await admin.storage.from("wish-photos").list(personId, { limit: 1000 });
+  if (files?.length) await admin.storage.from("wish-photos").remove(files.map((f) => `${personId}/${f.name}`));
+  const { error } = await admin.auth.admin.deleteUser(personId); // profile, link and wishes go with it (on delete cascade)
+  if (error) { console.error("deleteUser failed", error); throw new HttpError(500, "Could not remove that person"); }
+  return { id: personId, name: person.display_name };
+}
+
 async function listPeople(req: Request) {
   const owner = await requireOwner(req);
   const { data } = await admin.from("profiles").select("id, display_name, role").eq("family_id", owner.family_id).order("created_at");
@@ -291,6 +305,7 @@ Deno.serve(async (req) => {
       case "reset_link": return json(await resetLink(req, body));
       case "list_people": return json(await listPeople(req));
       case "link_preview": return json(await linkPreview(req, body));
+      case "delete_person": return json(await deletePerson(req, body));
       default: return json({ error: "Unknown action" }, 400);
     }
   } catch (e) {
