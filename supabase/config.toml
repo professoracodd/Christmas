@@ -1,0 +1,4 @@
+# The family-admin function checks sign-in itself. Gateway JWT checks must be OFF,
+# because the new sb_publishable_ keys are not JWTs and would be rejected before the code runs.
+[functions.family-admin]
+verify_jwt = false
