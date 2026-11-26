@@ -63,13 +63,13 @@ export default function Lists({ me, isOwner = false }: { me: Profile; isOwner?: 
     const b = buyer[i.id]
     if (b === me.id) return 'Bought by you'
     if (isOwner) return b ? `Bought by ${names[b] ?? 'someone'}` : 'Bought (before names were saved)'
-    return 'Bought by someone else'
+    return 'Bought by another'
   }
 
   async function toggle(i: Item) {
     const next = !bought[i.id]
     if (!next) {
-      if (!canUndo(i)) return setErr('Only the person who bought this (or Mom) can undo it.')
+      if (!canUndo(i)) return setErr('You did not buy this.')
       const who = buyer[i.id] && buyer[i.id] !== me.id ? `${names[buyer[i.id]!] ?? 'Someone else'} bought this. ` : ''
       if (!confirm(`${who}Mark "${i.name}" as still needed? Others will see it as available again.`)) return
     }
@@ -78,7 +78,7 @@ export default function Lists({ me, isOwner = false }: { me: Profile; isOwner?: 
     setBought((b) => ({ ...b, [i.id]: next })); setBuyer((m) => ({ ...m, [i.id]: next ? me.id : null }))
     const { error } = await supabase.from('purchase_status').update({ status: next ? 'purchased' : 'available' }).eq('item_id', i.id)
     if (error) {
-      setErr(error.message.includes('Only the person') ? 'Only the person who bought this (or Mom) can undo it.' : 'Could not update. Please try again.')
+      setErr(!next ? 'You did not buy this.' : 'Could not update. Please try again.')
       setBought((b) => ({ ...b, [i.id]: !next })); setBuyer((m) => ({ ...m, [i.id]: prevBuyer }))
       load()
     }
@@ -133,7 +133,8 @@ export default function Lists({ me, isOwner = false }: { me: Profile; isOwner?: 
   const kid = kids.find((k) => k.id === kidId)
   const mine = all.filter((i) => i.child_id === kidId)
   const needed = mine.filter((i) => !bought[i.id])
-  const boughtList = mine.filter((i) => bought[i.id])
+  const mineFirst = (i: Item) => (buyer[i.id] === me.id ? 0 : 1)
+  const boughtList = mine.filter((i) => bought[i.id]).sort((a, b) => mineFirst(a) - mineFirst(b))
   const got = mine.filter((i) => bought[i.id]).length
   const pct = mine.length ? Math.round((got / mine.length) * 100) : 0
   const stillCost = mine.filter((i) => !bought[i.id]).reduce((s, i) => s + (Number(i.estimated_price) || 0), 0)
@@ -184,7 +185,11 @@ export default function Lists({ me, isOwner = false }: { me: Profile; isOwner?: 
           )} />
       ) : (
         <StoreGroups key="bought" items={boughtList}
-          summary={(list) => `${list.length} bought`}
+          summary={(list) => {
+            const you = list.filter((i) => buyer[i.id] === me.id).length, other = list.length - you
+            return [you ? `${you} bought by you` : '', other ? `${other} bought by another` : ''].filter(Boolean).join(' · ')
+          }}
+          priority={(list) => list.filter((i) => buyer[i.id] === me.id).length}
           render={(i) => (
             <WishCard key={i.id} item={i}
               top={<span className="tag mint"><Check size={14} /> {boughtBy(i)}</span>}

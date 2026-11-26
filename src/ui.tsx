@@ -87,10 +87,11 @@ export function storeOf(i: Item): string {
 }
 
 // Collapsible section per store. Bigger stores first; "Other wishes" last.
-export function StoreGroups({ items, render, summary }: { items: Item[]; render: (i: Item) => ReactNode; summary?: (list: Item[]) => ReactNode }) {
+export function StoreGroups({ items, render, summary, priority }: { items: Item[]; render: (i: Item) => ReactNode; summary?: (list: Item[]) => ReactNode; priority?: (list: Item[]) => number }) {
   const groups = new Map<string, Item[]>()
   for (const i of items) { const s = storeOf(i); groups.set(s, [...(groups.get(s) ?? []), i]) }
-  const names = [...groups.keys()].sort((a, b) => (a === 'Other wishes' ? 1 : b === 'Other wishes' ? -1 : groups.get(b)!.length - groups.get(a)!.length || a.localeCompare(b)))
+  const pr = (n: string) => (priority ? (priority(groups.get(n)!) > 0 ? 1 : 0) : 0)
+  const names = [...groups.keys()].sort((a, b) => pr(b) - pr(a) || (a === 'Other wishes' ? 1 : b === 'Other wishes' ? -1 : groups.get(b)!.length - groups.get(a)!.length || a.localeCompare(b)))
   return (
     <div className="stores">
       {names.map((name) => {
