@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase, admin, Profile, Item, ITEM_COLS, money } from './supabase'
 import { WishCard, Banner, toneFor, StoreGroups } from './ui'
-import { Check, ChevronLeft, Gift, Sparkle, Trash } from './Icons'
+import { Check, ChevronLeft, Gift, Sparkle, Star, Trash } from './Icons'
 
 type Kid = { id: string; display_name: string }
 
@@ -132,12 +132,17 @@ export default function Lists({ me, isOwner = false }: { me: Profile; isOwner?: 
   // ---------- One kid's list ----------
   const kid = kids.find((k) => k.id === kidId)
   const mine = all.filter((i) => i.child_id === kidId)
-  const needed = mine.filter((i) => !bought[i.id])
+  const needed = mine.filter((i) => !bought[i.id]).sort((a, b) => Number(b.top_choice) - Number(a.top_choice))
   const mineFirst = (i: Item) => (buyer[i.id] === me.id ? 0 : 1)
   const boughtList = mine.filter((i) => bought[i.id]).sort((a, b) => mineFirst(a) - mineFirst(b))
   const got = mine.filter((i) => bought[i.id]).length
   const pct = mine.length ? Math.round((got / mine.length) * 100) : 0
   const stillCost = mine.filter((i) => !bought[i.id]).reduce((s, i) => s + (Number(i.estimated_price) || 0), 0)
+  // What this shopper has bought: for this kid, and across every list
+  const sum = (list: Item[]) => list.reduce((s, i) => s + (Number(i.estimated_price) || 0), 0)
+  const myHere = boughtList.filter((i) => buyer[i.id] === me.id)
+  const myAll = all.filter((i) => bought[i.id] && buyer[i.id] === me.id)
+  const noPrice = myAll.filter((i) => i.estimated_price === null).length
 
   return (
     <>
@@ -176,14 +181,30 @@ export default function Lists({ me, isOwner = false }: { me: Profile; isOwner?: 
 
       {view === 'needed' ? (
         <StoreGroups key="needed" items={needed}
-          summary={(list) => `${list.length} still needed`}
+          summary={(list) => {
+            const t = list.filter((i) => i.top_choice).length
+            return `${list.length} still needed${t ? ` · ${t} top ${t === 1 ? 'choice' : 'choices'}` : ''}`
+          }}
+          priority={(list) => list.filter((i) => i.top_choice).length}
           render={(i) => (
             <WishCard key={i.id} item={i}
-              top={<span className="tag plain"><Sparkle size={14} /> Still wished for</span>}
+              top={i.top_choice
+                ? <span className="tag gold"><Star size={14} className="star-on" /> Top choice</span>
+                : <span className="tag plain"><Sparkle size={14} /> Still wished for</span>}
               actions={<>{removeBtn(i)}<button className="pill primary" disabled={busy === i.id} onClick={() => toggle(i)}><Check size={16} /> I bought this</button></>}
             />
           )} />
-      ) : (
+      ) : (<>
+        {myAll.length > 0 && (
+          <section className="spend" aria-label="What you have spent">
+            <div className="spend-row"><span>Your gifts for {kid?.display_name}</span><strong>{money(sum(myHere))}</strong></div>
+            <small>{myHere.length} {myHere.length === 1 ? 'gift' : 'gifts'}</small>
+            {myAll.length !== myHere.length && (
+              <div className="spend-row all"><span>All your gifts</span><strong>{money(sum(myAll))}</strong></div>
+            )}
+            {noPrice > 0 && <small>{noPrice} of your gifts {noPrice === 1 ? 'has' : 'have'} no price listed, so {noPrice === 1 ? "it isn't" : "they aren't"} counted.</small>}
+          </section>
+        )}
         <StoreGroups key="bought" items={boughtList}
           summary={(list) => {
             const you = list.filter((i) => buyer[i.id] === me.id).length, other = list.length - you
@@ -198,7 +219,7 @@ export default function Lists({ me, isOwner = false }: { me: Profile; isOwner?: 
                 : <span className="muted">Only the buyer can undo</span>}</>}
             />
           )} />
-      )}
+      </>)}
     </>
   )
 }

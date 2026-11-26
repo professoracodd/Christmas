@@ -285,3 +285,14 @@ body.home-view .shell::after { background: url('/bg.jpg') center calc(70px + env
   min-height: 44px; padding: 0 18px; border-radius: 999px; background: rgba(150, 66, 97, .92); color: #fff; font-weight: 700; font-size: 14px;
   box-shadow: 0 6px 16px rgba(74, 62, 71, .35); animation: pulse 1.8s ease-in-out infinite; }
 @keyframes pulse { 50% { transform: translateX(-50%) scale(1.06); } }
+
+/* Top choice star + shopper spend total */
+.star-on path { fill: currentColor; }
+.pill.gold { background: var(--gold); color: var(--gold-ink); }
+.top-hint { display: flex; align-items: center; gap: 6px; margin: 0 4px 10px; color: var(--gold-ink); }
+.spend { margin: 0 0 14px; padding: 14px 16px; border-radius: 18px; background: rgba(255, 255, 255, .88); box-shadow: 0 6px 18px rgba(80, 30, 50, .10); display: grid; gap: 4px; }
+.spend-row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-weight: 700; color: var(--ink); }
+.spend-row strong { font-size: 22px; color: var(--primary); }
+.spend-row.all { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--surface-c); }
+.spend-row.all strong { font-size: 18px; }
+.spend small { color: var(--ink-soft); font-size: 12px; }

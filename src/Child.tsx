@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, FormEvent } from 'react'
 import { supabase, Profile, Item, ITEM_COLS, siteName } from './supabase'
 import { findPicture, uploadPhoto, isUploadedPhoto } from './pictures'
 import { Sheet, WishCard, WishImage, Banner, StoreGroups } from './ui'
-import { Camera, Close, LinkOut, Pencil, Plus, Trash, Sparkle } from './Icons'
+import { Camera, Close, LinkOut, Pencil, Plus, Trash, Sparkle, Star } from './Icons'
 
 // photo: the picture is one the kid uploaded (kept even without a link)
 const blank = { notes: '', price: '', url: '', image_url: '', link_title: '', link_site: '', photo: false }
@@ -49,6 +49,14 @@ export default function Child({ me }: { me: Profile }) {
       .eq('child_id', me.id).order('created_at', { ascending: false })
     if (error) setErr('Could not load your list. Pull down to refresh.')
     setItems((data as Item[]) || [])
+  }
+
+  // Star a wish as a top choice (shoppers see these first)
+  async function toggleTop(i: Item) {
+    const next = !i.top_choice
+    setItems((list) => (list ?? []).map((x) => (x.id === i.id ? { ...x, top_choice: next } : x)))
+    const { error } = await supabase.from('wish_list_items').update({ top_choice: next }).eq('id', i.id)
+    if (error) { setErr('Could not save that. Please try again.'); load() }
   }
   useEffect(() => { load() }, [])
 
@@ -162,8 +170,17 @@ export default function Child({ me }: { me: Profile }) {
 
       {!editing && <Banner err={err} />}
 
-      <StoreGroups items={items ?? []} render={(i) => (
-        <WishCard key={i.id} item={i} actions={<>
+      {count > 0 && <p className="muted tiny top-hint"><Star size={14} className="star-on" /> Tap <strong>Top choice</strong> on the wishes you want most.</p>}
+
+      <StoreGroups items={[...(items ?? [])].sort((a, b) => Number(b.top_choice) - Number(a.top_choice))}
+        priority={(list) => list.filter((i) => i.top_choice).length}
+        render={(i) => (
+        <WishCard key={i.id} item={i}
+          top={i.top_choice ? <span className="tag gold"><Star size={14} className="star-on" /> Top choice</span> : undefined}
+          actions={<>
+          <button className={`pill ${i.top_choice ? 'gold' : 'ghost'}`} aria-pressed={i.top_choice} onClick={() => toggleTop(i)}>
+            <Star size={16} className={i.top_choice ? 'star-on' : ''} /> {i.top_choice ? 'Top choice' : 'Make top choice'}
+          </button>
           <button className="pill soft" onClick={() => edit(i)}><Pencil size={16} /> Change</button>
           <button className="pill ghost danger" onClick={() => remove(i)} aria-label={`Delete ${i.name}`}><Trash size={16} /> Delete</button>
         </>} />
