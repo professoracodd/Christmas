@@ -296,3 +296,12 @@ body.home-view .shell::after { background: url('/bg.jpg') center calc(70px + env
 .spend-row.all { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--surface-c); }
 .spend-row.all strong { font-size: 18px; }
 .spend small { color: var(--ink-soft); font-size: 12px; }
+
+/* CeCe top-choice button (kids) */
+.cece-btn { display: inline-flex; align-items: center; gap: 8px; padding: 4px 14px 4px 4px; border: 0; border-radius: 999px; background: var(--surface-low); color: var(--ink-soft); font: inherit; font-weight: 700; font-size: 14px; cursor: pointer; transition: transform .15s ease, background .15s ease; }
+.cece-btn img { width: 40px; height: 40px; border-radius: 50%; filter: grayscale(.85) opacity(.7); box-shadow: 0 0 0 2px var(--white), 0 0 0 4px var(--outline-soft); transition: filter .2s ease, box-shadow .2s ease, transform .2s ease; }
+.cece-btn:hover img { filter: grayscale(.3); }
+.cece-btn.on { background: var(--gold); color: var(--gold-ink); }
+.cece-btn.on img { filter: none; box-shadow: 0 0 0 2px var(--white), 0 0 0 4px var(--gold-dim); transform: scale(1.06) rotate(-6deg); }
+.cece-btn:active { transform: scale(.96); }
+.top-hint img { border-radius: 50%; }

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, FormEvent } from 'react'
-import { supabase, Profile, Item, ITEM_COLS, siteName } from './supabase'
+import { supabase, Profile, Item, ITEM_COLS, siteName, BASE } from './supabase'
 import { findPicture, uploadPhoto, isUploadedPhoto } from './pictures'
 import { Sheet, WishCard, WishImage, Banner, StoreGroups } from './ui'
 import { Camera, Close, LinkOut, Pencil, Plus, Trash, Sparkle, Star } from './Icons'
@@ -170,7 +170,7 @@ export default function Child({ me }: { me: Profile }) {
 
       {!editing && <Banner err={err} />}
 
-      {count > 0 && <p className="muted tiny top-hint"><Star size={14} className="star-on" /> Tap <strong>Top choice</strong> on the wishes you want most.</p>}
+      {count > 0 && <p className="muted tiny top-hint"><img src={`${BASE}cece.png`} alt="" width="22" height="22" /> Tap CeCe on the wishes you want most.</p>}
 
       <StoreGroups items={[...(items ?? [])].sort((a, b) => Number(b.top_choice) - Number(a.top_choice))}
         priority={(list) => list.filter((i) => i.top_choice).length}
@@ -178,8 +178,8 @@ export default function Child({ me }: { me: Profile }) {
         <WishCard key={i.id} item={i}
           top={i.top_choice ? <span className="tag gold"><Star size={14} className="star-on" /> Top choice</span> : undefined}
           actions={<>
-          <button className={`pill ${i.top_choice ? 'gold' : 'ghost'}`} aria-pressed={i.top_choice} onClick={() => toggleTop(i)}>
-            <Star size={16} className={i.top_choice ? 'star-on' : ''} /> {i.top_choice ? 'Top choice' : 'Make top choice'}
+          <button className={`cece-btn${i.top_choice ? ' on' : ''}`} aria-pressed={i.top_choice} onClick={() => toggleTop(i)}>
+            <img src={`${BASE}cece.png`} alt="" width="40" height="40" /> <span>{i.top_choice ? 'Top choice' : 'Make top choice'}</span>
           </button>
           <button className="pill soft" onClick={() => edit(i)}><Pencil size={16} /> Change</button>
           <button className="pill ghost danger" onClick={() => remove(i)} aria-label={`Delete ${i.name}`}><Trash size={16} /> Delete</button>
