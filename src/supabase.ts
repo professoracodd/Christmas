@@ -35,9 +35,9 @@ export type Role = 'parent' | 'child' | 'gift_buyer'
 export type Profile = { id: string; family_id: string; display_name: string; role: Role }
 export type Item = {
   id: string; child_id: string; name: string; description: string | null; estimated_price: number | null
-  product_url: string | null; image_url: string | null; link_title: string | null; link_site: string | null; top_choice: boolean
+  product_url: string | null; image_url: string | null; link_title: string | null; link_site: string | null; top_choice: boolean; must_have: boolean
 }
-export const ITEM_COLS = 'id, child_id, name, description, estimated_price, product_url, image_url, link_title, link_site, top_choice'
+export const ITEM_COLS = 'id, child_id, name, description, estimated_price, product_url, image_url, link_title, link_site, top_choice, must_have'
 export const TITLE = 'Eli & Jazz Christmas'
 
 export const money = (n: number | null) => (n === null || n === undefined ? '' : `$${Number(n).toFixed(2)}`)

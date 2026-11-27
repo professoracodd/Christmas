@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, FormEvent } from 'react'
 import { supabase, Profile, Item, ITEM_COLS, siteName, BASE } from './supabase'
 import { findPicture, uploadPhoto, isUploadedPhoto } from './pictures'
-import { Sheet, WishCard, WishImage, Banner, StoreGroups } from './ui'
+import { Sheet, WishCard, WishImage, Banner, StoreGroups, SearchBox, CeCeTrio, matches, byRank, groupRank, wishTag } from './ui'
 import { Camera, Close, LinkOut, Pencil, Plus, Trash, Sparkle, Star } from './Icons'
 
 // photo: the picture is one the kid uploaded (kept even without a link)
@@ -51,13 +51,14 @@ export default function Child({ me }: { me: Profile }) {
     setItems((data as Item[]) || [])
   }
 
-  // Star a wish as a top choice (shoppers see these first)
-  async function toggleTop(i: Item) {
-    const next = !i.top_choice
-    setItems((list) => (list ?? []).map((x) => (x.id === i.id ? { ...x, top_choice: next } : x)))
-    const { error } = await supabase.from('wish_list_items').update({ top_choice: next }).eq('id', i.id)
+  // Flag a wish as a top choice or "can't live without" (shoppers see these first)
+  async function toggleFlag(i: Item, key: 'top_choice' | 'must_have') {
+    const next = !i[key]
+    setItems((list) => (list ?? []).map((x) => (x.id === i.id ? { ...x, [key]: next } : x)))
+    const { error } = await supabase.from('wish_list_items').update({ [key]: next }).eq('id', i.id)
     if (error) { setErr('Could not save that. Please try again.'); load() }
   }
+  const [q, setQ] = useState('')
   useEffect(() => { load() }, [])
 
   function edit(i?: Item) {
@@ -155,6 +156,7 @@ export default function Child({ me }: { me: Profile }) {
 
   const set = (k: keyof Form) => (e: any) => setForm({ ...form, [k]: e.target.value })
   const count = items?.length ?? 0
+  const shown = (items ?? []).filter((i) => matches(i, q)).sort(byRank)
 
   return (
     <>
@@ -170,15 +172,20 @@ export default function Child({ me }: { me: Profile }) {
 
       {!editing && <Banner err={err} />}
 
-      {count > 0 && <p className="muted tiny top-hint"><img src={`${BASE}cece.png`} alt="" width="22" height="22" /> Tap CeCe on the wishes you want most.</p>}
+      {count > 0 && <>
+        <SearchBox value={q} onChange={setQ} count={shown.length} total={count} />
+        <p className="muted tiny top-hint"><img src={`${BASE}cece.png`} alt="" width="22" height="22" /> Tap CeCe for a top choice, or all three CeCes for a wish you can't live without.</p>
+      </>}
+      {q && shown.length === 0 && <p className="muted center">No wishes match "{q}".</p>}
 
-      <StoreGroups items={[...(items ?? [])].sort((a, b) => Number(b.top_choice) - Number(a.top_choice))}
-        priority={(list) => list.filter((i) => i.top_choice).length}
+      <StoreGroups items={shown} openAll={!!q} priority={groupRank}
         render={(i) => (
-        <WishCard key={i.id} item={i}
-          top={i.top_choice ? <span className="tag gold"><Star size={14} className="star-on" /> Top choice</span> : undefined}
+        <WishCard key={i.id} item={i} top={wishTag(i)}
           actions={<>
-          <button className={`cece-btn${i.top_choice ? ' on' : ''}`} aria-pressed={i.top_choice} onClick={() => toggleTop(i)}>
+          <button className={`must-btn${i.must_have ? ' on' : ''}`} aria-pressed={i.must_have} onClick={() => toggleFlag(i, 'must_have')}>
+            <CeCeTrio size={34} /> <span>Can't live without</span>
+          </button>
+          <button className={`cece-btn${i.top_choice ? ' on' : ''}`} aria-pressed={i.top_choice} onClick={() => toggleFlag(i, 'top_choice')}>
             <img src={`${BASE}cece.png`} alt="" width="40" height="40" /> <span>{i.top_choice ? 'Top choice' : 'Make top choice'}</span>
           </button>
           <button className="pill soft" onClick={() => edit(i)}><Pencil size={16} /> Change</button>

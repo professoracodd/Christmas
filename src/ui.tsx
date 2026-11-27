@@ -1,5 +1,5 @@
 import { ReactNode, useEffect, useRef, useState } from 'react'
-import { Item, money, siteName } from './supabase'
+import { Item, money, siteName, BASE } from './supabase'
 import { Close, GiftArt, LinkOut } from './Icons'
 
 // Bottom sheet / dialog built on <dialog> (keyboard focus and Esc handled by the browser)
@@ -87,17 +87,17 @@ export function storeOf(i: Item): string {
 }
 
 // Collapsible section per store. Bigger stores first; "Other wishes" last.
-export function StoreGroups({ items, render, summary, priority }: { items: Item[]; render: (i: Item) => ReactNode; summary?: (list: Item[]) => ReactNode; priority?: (list: Item[]) => number }) {
+export function StoreGroups({ items, render, summary, priority, openAll }: { items: Item[]; render: (i: Item) => ReactNode; summary?: (list: Item[]) => ReactNode; priority?: (list: Item[]) => number; openAll?: boolean }) {
   const groups = new Map<string, Item[]>()
   for (const i of items) { const s = storeOf(i); groups.set(s, [...(groups.get(s) ?? []), i]) }
-  const pr = (n: string) => (priority ? (priority(groups.get(n)!) > 0 ? 1 : 0) : 0)
+  const pr = (n: string) => (priority ? priority(groups.get(n)!) : 0)
   const names = [...groups.keys()].sort((a, b) => pr(b) - pr(a) || (a === 'Other wishes' ? 1 : b === 'Other wishes' ? -1 : groups.get(b)!.length - groups.get(a)!.length || a.localeCompare(b)))
   return (
     <div className="stores">
       {names.map((name) => {
         const list = groups.get(name)!
         return (
-          <details key={name} className="store">
+          <details key={name + (openAll ? '-open' : '')} className="store" open={openAll || undefined}>
             <summary>
               <span className="store-badge" aria-hidden="true">{name === 'Other wishes' ? '+' : name.charAt(0)}</span>
               <span className="store-name"><strong>{name}</strong><small>{summary ? summary(list) : `${list.length} ${list.length === 1 ? 'wish' : 'wishes'}`}</small></span>
@@ -110,3 +110,37 @@ export function StoreGroups({ items, render, summary, priority }: { items: Item[
     </div>
   )
 }
+
+// ---------- Search, ranking and the "Can't live without" / "Top choice" tags ----------
+const words = (q: string) => q.toLowerCase().split(/\s+/).filter(Boolean)
+// Every typed word must appear somewhere in the wish (name, notes, store, link title)
+export function matches(i: Item, q: string) {
+  const w = words(q)
+  if (!w.length) return true
+  const hay = [i.name, i.description, i.link_title, i.link_site, siteName(i.product_url)].join(' ').toLowerCase()
+  return w.every((x) => hay.includes(x))
+}
+// Can't live without first, then top choices
+export const wishRank = (i: Item) => (i.must_have ? 2 : 0) + (i.top_choice ? 1 : 0)
+export const byRank = (a: Item, b: Item) => wishRank(b) - wishRank(a)
+export const groupRank = (list: Item[]) => Math.max(0, ...list.map(wishRank))
+
+export function SearchBox({ value, onChange, count, total }: { value: string; onChange: (v: string) => void; count: number; total: number }) {
+  return (
+    <div className="search">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+      <input type="search" value={value} onChange={(e) => onChange(e.target.value)} placeholder="Search wishes" aria-label="Search wishes" enterKeyHint="search" />
+      {value && <button type="button" className="search-clear" onClick={() => onChange('')} aria-label="Clear search"><Close size={16} /></button>}
+      {value && <span className="search-count" role="status">{count} of {total}</span>}
+    </div>
+  )
+}
+
+export const CeCeTrio = ({ size = 26 }: { size?: number }) => (
+  <span className="cece-trio" aria-hidden="true">
+    {[0, 1, 2].map((n) => <img key={n} src={`${BASE}cece.png`} alt="" width={size} height={size} />)}
+  </span>
+)
+export const MustHaveTag = () => <span className="tag must"><CeCeTrio size={20} /> Can't live without</span>
+export const TopTag = () => <span className="tag gold"><img className="tag-cece" src={`${BASE}cece.png`} alt="" width="18" height="18" /> Top choice</span>
+export const wishTag = (i: Item) => (i.must_have ? <MustHaveTag /> : i.top_choice ? <TopTag /> : undefined)

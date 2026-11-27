@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase, admin, Profile, Item, ITEM_COLS, money } from './supabase'
-import { WishCard, Banner, toneFor, StoreGroups } from './ui'
+import { WishCard, Banner, toneFor, StoreGroups, SearchBox, matches, byRank, groupRank, wishTag } from './ui'
 import { Check, ChevronLeft, Gift, Sparkle, Star, Trash } from './Icons'
 
 type Kid = { id: string; display_name: string }
@@ -15,6 +15,7 @@ export default function Lists({ me, isOwner = false }: { me: Profile; isOwner?: 
   const [names, setNames] = useState<Record<string, string>>({})          // owner only: profile id -> name
   const [kidId, setKidId] = useState<string | null>(null)
   const [view, setView] = useState<'needed' | 'bought'>('needed')
+  const [q, setQ] = useState('')
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState<string | null>(null)
   const timer = useRef<number>()
@@ -113,7 +114,7 @@ export default function Lists({ me, isOwner = false }: { me: Profile; isOwner?: 
             {kids.map((k) => {
               const n = stillNeeded(k.id)
               return (
-                <button key={k.id} className={`kid-pick ${toneFor(kidIndex[k.id] ?? 0)}`} onClick={() => { setView('needed'); setKidId(k.id) }}>
+                <button key={k.id} className={`kid-pick ${toneFor(kidIndex[k.id] ?? 0)}`} onClick={() => { setView('needed'); setQ(''); setKidId(k.id) }}>
                   <span className="kid-initial" aria-hidden="true">{k.display_name.slice(0, 1).toUpperCase()}</span>
                   <span className="kid-text">
                     <strong>{k.display_name}</strong>
@@ -132,15 +133,17 @@ export default function Lists({ me, isOwner = false }: { me: Profile; isOwner?: 
   // ---------- One kid's list ----------
   const kid = kids.find((k) => k.id === kidId)
   const mine = all.filter((i) => i.child_id === kidId)
-  const needed = mine.filter((i) => !bought[i.id]).sort((a, b) => Number(b.top_choice) - Number(a.top_choice))
+  const needed = mine.filter((i) => !bought[i.id] && matches(i, q)).sort(byRank)
+  const neededAll = mine.filter((i) => !bought[i.id]).length
   const mineFirst = (i: Item) => (buyer[i.id] === me.id ? 0 : 1)
-  const boughtList = mine.filter((i) => bought[i.id]).sort((a, b) => mineFirst(a) - mineFirst(b))
+  const boughtAll = mine.filter((i) => bought[i.id])
+  const boughtList = boughtAll.filter((i) => matches(i, q)).sort((a, b) => mineFirst(a) - mineFirst(b))
   const got = mine.filter((i) => bought[i.id]).length
   const pct = mine.length ? Math.round((got / mine.length) * 100) : 0
   const stillCost = mine.filter((i) => !bought[i.id]).reduce((s, i) => s + (Number(i.estimated_price) || 0), 0)
   // What this shopper has bought: for this kid, and across every list
   const sum = (list: Item[]) => list.reduce((s, i) => s + (Number(i.estimated_price) || 0), 0)
-  const myHere = boughtList.filter((i) => buyer[i.id] === me.id)
+  const myHere = boughtAll.filter((i) => buyer[i.id] === me.id)
   const myAll = all.filter((i) => bought[i.id] && buyer[i.id] === me.id)
   const noPrice = myAll.filter((i) => i.estimated_price === null).length
 
@@ -166,31 +169,29 @@ export default function Lists({ me, isOwner = false }: { me: Profile; isOwner?: 
       <Banner err={err} />
 
       <div className="chips" role="group" aria-label="Filter wishes">
-        <button className={`chip${view === 'needed' ? ' on' : ''}`} aria-pressed={view === 'needed'} onClick={() => setView('needed')}>Still needed ({needed.length})</button>
-        <button className={`chip${view === 'bought' ? ' on' : ''}`} aria-pressed={view === 'bought'} onClick={() => setView('bought')}>Bought ({boughtList.length})</button>
+        <button className={`chip${view === 'needed' ? ' on' : ''}`} aria-pressed={view === 'needed'} onClick={() => setView('needed')}>Still needed ({neededAll})</button>
+        <button className={`chip${view === 'bought' ? ' on' : ''}`} aria-pressed={view === 'bought'} onClick={() => setView('bought')}>Bought ({boughtAll.length})</button>
       </div>
+      {mine.length > 0 && <SearchBox value={q} onChange={setQ} count={(view === 'needed' ? needed : boughtList).length} total={view === 'needed' ? neededAll : boughtAll.length} />}
 
       {items !== null && (view === 'needed' ? needed : boughtList).length === 0 && (
         <div className="empty">
           <div className="empty-art"><Gift size={30} /></div>
-          <h3>{mine.length === 0 ? 'No wishes yet' : view === 'needed' ? 'Everything is bought!' : 'Nothing bought yet'}</h3>
+          <h3>{mine.length === 0 ? 'No wishes yet' : q ? `No wishes match "${q}"` : view === 'needed' ? 'Everything is bought!' : 'Nothing bought yet'}</h3>
           <p>{mine.length === 0 ? `When ${kid?.display_name ?? 'they'} adds wishes, they show up here.`
-            : view === 'needed' ? 'Nothing left on this list.' : 'Tap "I bought this" on a gift and it moves here.'}</p>
+            : q ? 'Try a different word.' : view === 'needed' ? 'Nothing left on this list.' : 'Tap "I bought this" on a gift and it moves here.'}</p>
         </div>
       )}
 
       {view === 'needed' ? (
-        <StoreGroups key="needed" items={needed}
+        <StoreGroups key="needed" items={needed} openAll={!!q} priority={groupRank}
           summary={(list) => {
-            const t = list.filter((i) => i.top_choice).length
-            return `${list.length} still needed${t ? ` · ${t} top ${t === 1 ? 'choice' : 'choices'}` : ''}`
+            const m = list.filter((i) => i.must_have).length, t = list.filter((i) => i.top_choice && !i.must_have).length
+            return [`${list.length} still needed`, m ? `${m} can't live without` : '', t ? `${t} top ${t === 1 ? 'choice' : 'choices'}` : ''].filter(Boolean).join(' · ')
           }}
-          priority={(list) => list.filter((i) => i.top_choice).length}
           render={(i) => (
             <WishCard key={i.id} item={i}
-              top={i.top_choice
-                ? <span className="tag gold"><Star size={14} className="star-on" /> Top choice</span>
-                : <span className="tag plain"><Sparkle size={14} /> Still wished for</span>}
+              top={wishTag(i) ?? <span className="tag plain"><Sparkle size={14} /> Still wished for</span>}
               actions={<>{removeBtn(i)}<button className="pill primary" disabled={busy === i.id} onClick={() => toggle(i)}><Check size={16} /> I bought this</button></>}
             />
           )} />
@@ -205,7 +206,7 @@ export default function Lists({ me, isOwner = false }: { me: Profile; isOwner?: 
             {noPrice > 0 && <small>{noPrice} of your gifts {noPrice === 1 ? 'has' : 'have'} no price listed, so {noPrice === 1 ? "it isn't" : "they aren't"} counted.</small>}
           </section>
         )}
-        <StoreGroups key="bought" items={boughtList}
+        <StoreGroups key="bought" items={boughtList} openAll={!!q}
           summary={(list) => {
             const you = list.filter((i) => buyer[i.id] === me.id).length, other = list.length - you
             return [you ? `${you} bought by you` : '', other ? `${other} bought by another` : ''].filter(Boolean).join(' · ')

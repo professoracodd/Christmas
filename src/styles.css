@@ -305,3 +305,30 @@ body.home-view .shell::after { background: url('/bg.jpg') center calc(70px + env
 .cece-btn.on img { filter: none; box-shadow: 0 0 0 2px var(--white), 0 0 0 4px var(--gold-dim); transform: scale(1.06) rotate(-6deg); }
 .cece-btn:active { transform: scale(.96); }
 .top-hint img { border-radius: 50%; }
+
+/* Search box */
+.search { position: relative; display: flex; align-items: center; gap: 8px; margin: 2px 0 12px; padding: 0 12px; height: 48px; border-radius: 999px; background: rgba(255, 255, 255, .94); box-shadow: 0 4px 14px rgba(80, 30, 50, .10), inset 0 0 0 1.5px var(--outline-soft); color: var(--ink-soft); }
+.search:focus-within { box-shadow: 0 4px 14px rgba(80, 30, 50, .12), inset 0 0 0 2px var(--primary); }
+.search input { flex: 1; min-width: 0; border: 0; background: none; font: inherit; font-size: 16px; color: var(--ink); outline: none; }
+.search input::-webkit-search-cancel-button { display: none; }
+.search-clear { border: 0; background: var(--surface-c); color: var(--ink-soft); width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; cursor: pointer; }
+.search-count { font-size: 12px; font-weight: 700; color: var(--ink-soft); white-space: nowrap; }
+.center { text-align: center; }
+
+/* "Can't live without": three CeCes, glowing */
+.cece-trio { display: inline-flex; }
+.cece-trio img { border-radius: 50%; box-shadow: 0 0 0 2px var(--white); }
+.cece-trio img + img { margin-left: -8px; }
+.must-btn { display: inline-flex; align-items: center; gap: 8px; padding: 4px 14px 4px 6px; border: 0; border-radius: 999px; background: var(--surface-low); color: var(--ink-soft); font: inherit; font-weight: 800; font-size: 14px; cursor: pointer; transition: transform .15s ease, background .2s ease; }
+.must-btn img { filter: grayscale(.85) opacity(.7); transition: filter .2s ease, transform .2s ease; }
+.must-btn:active { transform: scale(.96); }
+.must-btn.on { color: #6b1a3a; background: linear-gradient(90deg, #ffe087, #ffd0de, #ffe087); background-size: 200% 100%; animation: mustGlow 1.8s ease-in-out infinite, mustShine 4s linear infinite; }
+.must-btn.on img { filter: none; }
+.must-btn.on img:nth-child(1) { transform: rotate(-10deg); }
+.must-btn.on img:nth-child(3) { transform: rotate(10deg); }
+.tag.must { color: #6b1a3a; padding: 3px 12px 3px 4px; background: linear-gradient(90deg, #ffe087, #ffd0de, #ffe087); background-size: 200% 100%; animation: mustGlow 1.8s ease-in-out infinite, mustShine 4s linear infinite; font-weight: 800; }
+.tag-cece { border-radius: 50%; }
+@keyframes mustGlow { 0%, 100% { box-shadow: 0 0 0 2px rgba(255, 224, 135, .9), 0 0 10px 2px rgba(255, 200, 80, .55); } 50% { box-shadow: 0 0 0 2px rgba(244, 143, 177, .9), 0 0 20px 6px rgba(244, 143, 177, .6); } }
+@keyframes mustShine { to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { .must-btn.on, .tag.must { animation: none; box-shadow: 0 0 0 2px #ffd36b, 0 0 14px 4px rgba(244, 143, 177, .5); } }
+.tag.must .cece-trio img + img { margin-left: -5px; }
